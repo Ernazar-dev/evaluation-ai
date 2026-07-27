@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "description": "AI Assistant Platform — Node.js + PostgreSQL + React (Vite/Tailwind/AntD)",
+  "engines": {
+    "node": "22.x"
+  },
   "scripts": {
     "build": "npm --prefix frontend install --include=dev && npm --prefix frontend run build && npm --prefix backend install --include=dev && npm --prefix backend run prisma:generate",
     "db:push": "npm --prefix backend run prisma:push",
