@@ -2,6 +2,7 @@
   "lang": {
     "uz": "O'zbekcha",
     "ru": "Русский",
+    "en": "English",
     "switch": "Til"
   },
   "dashboard": {
@@ -437,7 +438,7 @@
     "settingsTitle": "Tizim sozlamalari",
     "settingsSaved": "Sozlamalar saqlandi",
     "siteName": "Sayt nomi",
-    "defaultLanguage": "Standart til (uz/ru)",
+    "defaultLanguage": "Standart til (uz/ru/en)",
     "aiRiskThreshold": "AI-xavf chegarasi",
     "plagiarismThreshold": "Plagiat chegarasi",
     "maxFileSize": "Maks. fayl hajmi (MB)",

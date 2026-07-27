@@ -12,7 +12,7 @@ import { generateJson, filePart, isConfigured } from './geminiClient.js';
 import { weightedTotal } from './rubric.js';
 import { t, DEFAULT_LANG } from '../i18n/index.js';
 
-const LANG_NAME = { uz: 'Uzbek (latin script)', ru: 'Russian' };
+const LANG_NAME = { uz: 'Uzbek (latin script)', ru: 'Russian', en: 'English' };
 
 /** JSON schema the model must fill in — one entry per rubric row, plus a summary. */
 function buildSchema(rows) {

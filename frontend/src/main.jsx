@@ -5,9 +5,11 @@ import { ConfigProvider } from 'antd';
 import { useTranslation } from 'react-i18next';
 import ruRU from 'antd/locale/ru_RU';
 import uzUZ from 'antd/locale/uz_UZ';
+import enUS from 'antd/locale/en_US';
 import dayjs from 'dayjs';
 import 'dayjs/locale/ru';
 import 'dayjs/locale/uz-latn';
+import 'dayjs/locale/en';
 import App from './App';
 import './i18n';
 import './index.css';
@@ -32,8 +34,8 @@ const theme = {
   },
 };
 
-const ANTD_LOCALES = { uz: uzUZ, ru: ruRU };
-const DAYJS_LOCALES = { uz: 'uz-latn', ru: 'ru' };
+const ANTD_LOCALES = { uz: uzUZ, ru: ruRU, en: enUS };
+const DAYJS_LOCALES = { uz: 'uz-latn', ru: 'ru', en: 'en' };
 
 // Keeps antd's built-in strings (date pickers, pagination, empty states) and
 // dayjs formatting in sync with the language picked in the UI.

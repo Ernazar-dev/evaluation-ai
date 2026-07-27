@@ -2,8 +2,9 @@ import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import uz from './locales/uz.json';
 import ru from './locales/ru.json';
+import en from './locales/en.json';
 
-export const SUPPORTED = ['uz', 'ru'];
+export const SUPPORTED = ['uz', 'ru', 'en'];
 export const DEFAULT_LANG = 'uz';
 const STORAGE_KEY = 'lang';
 
@@ -22,7 +23,7 @@ export function setLang(lng) {
 }
 
 i18n.use(initReactI18next).init({
-  resources: { uz: { translation: uz }, ru: { translation: ru } },
+  resources: { uz: { translation: uz }, ru: { translation: ru }, en: { translation: en } },
   lng: getLang(),
   fallbackLng: DEFAULT_LANG,
   interpolation: { escapeValue: false }, // React already escapes

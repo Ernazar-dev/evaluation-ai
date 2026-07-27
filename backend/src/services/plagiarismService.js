@@ -36,7 +36,7 @@ const AI_TEXT_CHARS = 14000;
 /** Longest matched passages reported back per pair. */
 const MAX_SNIPPETS = 3;
 
-const LANG_NAME = { uz: 'Uzbek (latin script)', ru: 'Russian' };
+const LANG_NAME = { uz: 'Uzbek (latin script)', ru: 'Russian', en: 'English' };
 
 // ---------------------------------------------------------------------------
 // Fingerprinting

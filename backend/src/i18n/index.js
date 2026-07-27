@@ -4,11 +4,12 @@
 
 import uz from './locales/uz.js';
 import ru from './locales/ru.js';
+import en from './locales/en.js';
 
-export const SUPPORTED = ['uz', 'ru'];
+export const SUPPORTED = ['uz', 'ru', 'en'];
 export const DEFAULT_LANG = 'uz';
 
-const DICTS = { uz, ru };
+const DICTS = { uz, ru, en };
 
 /** Maps the internal (English) section ids to their translation keys. */
 export const SECTION_KEYS = {

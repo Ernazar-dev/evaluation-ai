@@ -2,6 +2,7 @@
   "lang": {
     "uz": "O'zbekcha",
     "ru": "Русский",
+    "en": "English",
     "switch": "Язык"
   },
   "dashboard": {
@@ -437,7 +438,7 @@
     "settingsTitle": "Настройки системы",
     "settingsSaved": "Настройки сохранены",
     "siteName": "Название сайта",
-    "defaultLanguage": "Язык по умолчанию (uz/ru)",
+    "defaultLanguage": "Язык по умолчанию (uz/ru/en)",
     "aiRiskThreshold": "Порог AI-риска",
     "plagiarismThreshold": "Порог плагиата",
     "maxFileSize": "Макс. размер файла (МБ)",

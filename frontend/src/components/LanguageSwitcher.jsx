@@ -3,8 +3,8 @@ import { GlobalOutlined, DownOutlined, CheckOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { setLang, SUPPORTED } from '../i18n';
 
-const LABELS = { uz: "O'zbekcha", ru: 'Русский' };
-const SHORT = { uz: 'UZ', ru: 'RU' };
+const LABELS = { uz: "O'zbekcha", ru: 'Русский', en: 'English' };
+const SHORT = { uz: 'UZ', ru: 'RU', en: 'EN' };
 
 export default function LanguageSwitcher({ size = 'middle', type = 'text' }) {
   const { i18n } = useTranslation();
