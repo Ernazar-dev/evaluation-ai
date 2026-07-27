@@ -1,0 +1,71 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body, #root { height: 100%; margin: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: #f2f6fc;
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection { background: #bfdbff; }
+
+.page-fallback {
+  display: flex; align-items: center; justify-content: center;
+  min-height: 60vh; width: 100%;
+}
+
+/* Subtle lift on interactive cards (stat cards, list cards) */
+.ant-card.card-hover {
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+.ant-card.card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(9, 88, 217, 0.12);
+}
+
+/* Route-transition fade so lazy pages appear smoothly */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.page-enter { animation: fadeInUp 0.25s ease both; }
+
+/* ---- Sidebar ------------------------------------------------------------
+   The sider is pinned to the viewport height, so on a short screen the last
+   menu items (settings, help) used to fall below the fold with no way to reach
+   them. Laying the sider out as a column lets the menu take the remaining space
+   and scroll on its own, while the logo stays put. */
+.ant-layout-sider-children {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.sider-menu {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-bottom: 12px;
+}
+/* A light-on-dark scrollbar; the default one is invisible against the sider. */
+.sider-menu { scrollbar-color: rgba(255, 255, 255, 0.22) transparent; }
+.sider-menu::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.22); }
+.sider-menu::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.36); }
+
+/* ---- Dialogs ------------------------------------------------------------
+   Roomier padding and a clear divider under the title, so a form inside a
+   dialog reads as a form rather than as a stack of boxes. */
+.ant-modal .ant-modal-header { margin-bottom: 16px; padding-bottom: 14px; border-bottom: 1px solid #eef3fa; }
+.ant-modal .ant-modal-title { font-size: 17px; font-weight: 600; }
+.ant-modal .ant-modal-body { padding-block: 4px; }
+.ant-modal .ant-modal-footer { margin-top: 20px; padding-top: 14px; border-top: 1px solid #eef3fa; }
+/* On a phone a centered dialog must never be taller than the screen. */
+.ant-modal .ant-modal-body { max-height: calc(100vh - 220px); overflow-y: auto; }
+
+/* Slimmer, quieter scrollbars */
+* { scrollbar-width: thin; scrollbar-color: #b9cbe8 transparent; }
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-thumb { background: #b9cbe8; border-radius: 8px; }
+*::-webkit-scrollbar-thumb:hover { background: #93aede; }
+*::-webkit-scrollbar-track { background: transparent; }

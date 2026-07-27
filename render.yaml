@@ -1,0 +1,79 @@
+# Render Blueprint — one web service (API + built frontend) + a managed PostgreSQL DB.
+# Deploy: push to GitHub, then "New +" → "Blueprint" and point Render at this file.
+#
+# The build installs devDependencies explicitly (`--include=dev`, inside `npm run
+# build`): NODE_ENV=production makes npm skip them, and both the frontend build
+# tool (vite) and the Prisma CLI live there — without it the build fails.
+#
+# `db:push` carries `--accept-data-loss`. Without it, `prisma db push` refuses to
+# apply ANY change it considers destructive — including simply adding a unique
+# index — and the deploy fails at build time with "Use the --accept-data-loss
+# flag". The flag is what lets a schema change reach the deployed database.
+# It does mean a future edit that drops a column drops that column's data, so
+# check `npx prisma db push` locally (without the flag) before deploying a
+# schema change and read what it says it will do.
+#
+# `db:seed` runs on every deploy. It is idempotent (upserts) and is what creates
+# the one bootstrap admin account; skip it and the deployed app has no user that
+# can log in. It also resets that admin's password to ADMIN_PASSWORD each deploy.
+services:
+  - type: web
+    name: ai-assistant
+    runtime: node
+    plan: free
+    buildCommand: npm run build && npm run db:push && npm run db:seed
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: JWT_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: ai-assistant-db
+          property: connectionString
+      - key: CORS_ORIGINS
+        value: "*"
+
+      # ---- Bootstrap admin -------------------------------------------------
+      # The only account seeding creates; every teacher/student is added from
+      # inside the app. Set both in the dashboard before the first deploy.
+      - key: ADMIN_USERNAME
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+
+      # ---- Grading ---------------------------------------------------------
+      # Without GEMINI_API_KEY the platform still runs, but grading falls back to
+      # a mock that scores by text length — fine for a smoke test, not for real
+      # marking or a demo. Set the key in the dashboard.
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-3.6-flash
+      # Quota is counted per model. Once the newest model returns 429 the chain
+      # is the only thing keeping grading off the length-based mock, so it ends
+      # on an older, less contended model that still answers.
+      - key: GEMINI_FALLBACK_MODELS
+        value: gemini-flash-latest,gemini-3.5-flash,gemini-2.5-flash
+      # Each sample is one API call, and GEMINI_VERIFY adds one more: at 3 and
+      # "true" a single submission costs FOUR calls. That is the accuracy this
+      # platform is built around, but on a free API key it exhausts the daily
+      # quota after a handful of submissions and every later one silently drops
+      # to the mock grader. On a free key set GEMINI_SAMPLES to 1; keep 3 only
+      # with billing enabled on the Google Cloud project behind the key.
+      - key: GEMINI_SAMPLES
+        value: "3"
+      - key: GEMINI_VERIFY
+        value: "true"
+      - key: OPENROUTER_API_KEY
+        sync: false   # optional secondary text-only grader
+
+      # ---- Rules -----------------------------------------------------------
+      - key: MAX_ATTEMPTS
+        value: "3"
+
+databases:
+  - name: ai-assistant-db
+    plan: free
