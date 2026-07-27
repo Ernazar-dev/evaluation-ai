@@ -184,6 +184,49 @@ export async function processSubmission({
 }
 
 /**
+ * Closes out submissions whose grading was killed with the process that ran it.
+ *
+ * Grading is fire-and-forget (see `processSubmission`), so it lives exactly as
+ * long as the Node process does. The catch above covers grading that *fails*;
+ * nothing covers grading that is still running when the instance goes away —
+ * and on Render's free plan the instance goes away routinely, fifteen idle
+ * minutes after the student closed the tab. That submission keeps
+ * `overallScore: null`, which the UI reads as "processing", and no code will
+ * ever set it: the only code that would have died with the process.
+ *
+ * Re-grading it is not possible on that host. The uploaded file sat on an
+ * ephemeral disk and went with the instance, so there is nothing left to grade.
+ * The honest result is the one the in-process failure path already produces —
+ * score 0, `gradedBy: 'error'`, and the message asking for a resubmission. The
+ * attempt was counted when the work was handed in, and only the best attempt
+ * counts towards the grade, so this zero cannot drag down a mark the student
+ * earns on the retry.
+ *
+ * The grace window keeps the sweep off work an outgoing instance is still
+ * legitimately grading while the replacement boots during a redeploy.
+ */
+export async function failStalledSubmissions({ graceMinutes = 15 } = {}) {
+  const cutoff = new Date(Date.now() - graceMinutes * 60 * 1000);
+  try {
+    const { count } = await prisma.submission.updateMany({
+      where: { overallScore: null, submittedAt: { lt: cutoff } },
+      data: {
+        overallScore: 0,
+        aiFeedbackSummary: t(DEFAULT_LANG, 'ai.techError'),
+        gradedBy: 'error',
+      },
+    });
+    if (count)
+      console.log(`Recovered ${count} submission(s) left mid-grading by a restart.`);
+    return count;
+  } catch (e) {
+    // A database that is still waking up must not stop the server from booting.
+    console.error('Could not sweep stalled submissions:', e.message);
+    return 0;
+  }
+}
+
+/**
  * Re-runs the originality check on a submission that has already been graded —
  * for work handed in before this check existed, and for when a later submission
  * turns out to be the source of an earlier one.

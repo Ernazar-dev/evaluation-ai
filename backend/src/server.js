@@ -1,6 +1,7 @@
 import { createApp } from './app.js';
 import config from './config.js';
 import prisma from './lib/prisma.js';
+import { failStalledSubmissions } from './services/gradingService.js';
 
 const app = createApp();
 
@@ -38,6 +39,13 @@ const server = app.listen(config.port, '0.0.0.0', () => {
     );
   }
   console.log(`========================\n`);
+
+  // Any submission still "processing" now was being graded by an instance that
+  // no longer exists — this process is the one that just started. Close those
+  // out so nobody is left watching a spinner that will never resolve. Detached
+  // from the listen callback: a slow or still-waking database must delay the
+  // sweep, never the server accepting traffic.
+  failStalledSubmissions().catch((e) => console.error('stalled sweep failed', e));
 });
 
 // Background work (grading, the originality check) runs detached from the

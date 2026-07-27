@@ -182,7 +182,7 @@ ai-assistant/
 │       ├── api/        axios client + typed endpoint modules
 │       ├── store/      zustand auth store
 │       └── App.jsx     lazy routes + Suspense
-├── render.yaml         one-click Render Blueprint (web service + Postgres)
+├── render.yaml         one-click Render Blueprint (web service; DB is external/Neon)
 └── package.json        root orchestration scripts
 ```
 
@@ -230,19 +230,31 @@ live (re-running `npm run seed` updates the admin's password to the current `.en
 ## Deploy to Render (free tier)
 
 This repo ships a **single-service** setup: the Express server also serves the built React
-app, so you deploy one web service + one managed Postgres.
+app, so there is one Render web service and no separate frontend to host. The database is
+external — PostgreSQL on **Neon**.
 
-1. Push this folder to a GitHub repo (`git init && git add . && git commit && git push`).
+1. **Neon**: create a project and copy the connection string. Take the **direct** one, not
+   the pooled one (the pooled host has `-pooler` in it): `prisma db push` runs during the
+   Render build and does not work through pgbouncer. Append the query parameters described
+   next to `DATABASE_URL` in `render.yaml` — without `sslmode=require` Neon rejects the
+   connection outright, and the other two are what keep Neon's five-minute idle suspend from
+   surfacing as a failed first request.
+2. Push this folder to a GitHub repo (`git init && git add . && git commit && git push`).
    The Blueprint flow reads `render.yaml` out of a GitHub repo — there is no upload path.
-2. Set `ADMIN_USERNAME`, `ADMIN_PASSWORD` and `GEMINI_API_KEY` in the Render dashboard
-   **before** the first deploy — they are marked `sync: false` in `render.yaml`, which means
-   Render will prompt for them. `GEMINI_API_KEY` is what turns on real grading; without it a
-   deterministic mock grader is used, so the platform still runs but its scores mean nothing.
-3. In Render: **New + → Blueprint**, select the repo (it reads `render.yaml`).
-4. Render creates the Postgres DB and the web service, runs
-   `npm run build && npm run db:push && npm run db:seed`, then `npm start`. Seeding runs on
-   every deploy and is idempotent; it creates the one bootstrap admin you can log in as.
-5. Log in as `ADMIN_USERNAME` and create the teachers and students from **Admin → Users**.
+3. Set `DATABASE_URL`, `ADMIN_USERNAME`, `ADMIN_PASSWORD` and `GEMINI_API_KEY` in the Render
+   dashboard **before** the first deploy — they are marked `sync: false` in `render.yaml`,
+   which means Render will prompt for them. `GEMINI_API_KEY` is what turns on real grading;
+   without it a deterministic mock grader is used, so the platform still runs but its scores
+   mean nothing.
+4. In Render: **New + → Blueprint**, select the repo (it reads `render.yaml`).
+5. Render creates the web service, runs `npm run build && npm run db:push && npm run db:seed`,
+   then `npm start`. Seeding runs on every deploy and is idempotent; it creates the one
+   bootstrap admin you can log in as, and resets that admin's password to `ADMIN_PASSWORD`.
+6. Log in as `ADMIN_USERNAME` and create the teachers and students from **Admin → Users**.
+
+`render.yaml` deliberately has no `databases:` block. Adding one back would make Render
+provision its own Postgres *and* overwrite `DATABASE_URL` with it, silently pointing the
+deployed app at an empty database instead of Neon.
 
 ### What the free tier cannot do
 
@@ -256,6 +268,18 @@ app, so you deploy one web service + one managed Postgres.
 - **Schema changes need care.** `db:push` runs with `--accept-data-loss`, which is what lets a
   changed schema reach the deployed database at all. Run `npx prisma db push` locally *without*
   the flag first and read what it says it will drop.
+- **The instance sleeps after 15 idle minutes** and takes roughly a minute to wake. The first
+  visitor after a quiet spell waits through that; nobody after them does. Open the site a few
+  minutes before a demo so it is already awake.
+- **Grading can be cut short.** It runs detached from the request, so an instance that stops
+  mid-grading takes the unfinished work with it. `failStalledSubmissions()` runs at every boot
+  and closes those out (score 0, `gradedBy: 'error'`, a message asking for a resubmission)
+  rather than leaving the student on a spinner that would never resolve. The uploaded file is
+  gone with the disk by then, so re-grading is not an option — resubmitting is. Attempts are
+  counted at submission time and only the best attempt counts, so the zero costs no marks.
+- **0.1 CPU is the real ceiling.** `PLAGIARISM_BACKFILL`/`PLAGIARISM_POOL` are lowered in
+  `render.yaml` for this reason: the defaults re-parse 40 stored documents per originality
+  check, which is minutes of work on a tenth of a core.
 
 ### Why it won't "hang" on the free tier
 
@@ -280,9 +304,9 @@ app, so you deploy one web service + one managed Postgres.
 
 | Var                 | Description                                             |
 |---------------------|---------------------------------------------------------|
-| `DATABASE_URL`      | PostgreSQL connection string                            |
+| `DATABASE_URL`      | PostgreSQL connection string. On Neon: the **direct** URL plus `?sslmode=require&connect_timeout=20&connection_limit=5` |
 | `JWT_SECRET`        | Secret for signing JWTs                                 |
-| `PORT`              | API port (default 5000)                                 |
+| `PORT`              | API port (default 5000). **Do not set this on Render** — the platform assigns it, and overriding it makes the deploy fail with "no open ports detected" |
 | `CORS_ORIGINS`      | Comma-separated allowed origins (or `*`)                |
 | `GEMINI_API_KEY`    | **Enables real grading.** Key from https://aistudio.google.com/apikey |
 | `GEMINI_MODEL`      | Primary model (default `gemini-3.5-flash`)              |

@@ -1,4 +1,5 @@
-# Render Blueprint — one web service (API + built frontend) + a managed PostgreSQL DB.
+# Render Blueprint — one web service (API + built frontend). The database is
+# external (Neon); set DATABASE_URL in the dashboard.
 # Deploy: push to GitHub, then "New +" → "Blueprint" and point Render at this file.
 #
 # The build installs devDependencies explicitly (`--include=dev`, inside `npm run
@@ -29,10 +30,26 @@ services:
         value: production
       - key: JWT_SECRET
         generateValue: true
+      # Neon (external PostgreSQL). Paste the connection string in the Render
+      # dashboard. Use Neon's DIRECT (non-pooled, no `-pooler` in the host)
+      # string: `prisma db push` runs at build time and does not survive the
+      # pgbouncer pooler. Required query parameters:
+      #
+      #   ?sslmode=require   Neon refuses unencrypted connections outright.
+      #   &connect_timeout=20
+      #       Neon's free tier suspends the compute after five idle minutes and
+      #       has to cold-start on the next query. Prisma's default five-second
+      #       connect timeout can expire during that wake-up, surfacing as a
+      #       spurious "Can't reach database server" on the first request after
+      #       a quiet spell — exactly the request a visitor arrives on.
+      #   &connection_limit=5
+      #       Prisma otherwise sizes its pool from the host's CPU count, which
+      #       on a shared 0.1-CPU instance bears no relation to what this app
+      #       needs and burns Neon's free connection allowance.
+      #
+      #   postgresql://USER:PASS@ep-xxx.REGION.aws.neon.tech/neondb?sslmode=require&connect_timeout=20&connection_limit=5
       - key: DATABASE_URL
-        fromDatabase:
-          name: ai-assistant-db
-          property: connectionString
+        sync: false
       - key: CORS_ORIGINS
         value: "*"
 
@@ -74,6 +91,17 @@ services:
       - key: MAX_ATTEMPTS
         value: "3"
 
-databases:
-  - name: ai-assistant-db
-    plan: free
+      # ---- Originality check -----------------------------------------------
+      # Tuned down from the defaults for the free plan's 0.1 CPU. `BACKFILL`
+      # re-reads and re-parses that many stored submission files on every check
+      # to fingerprint work that predates the feature; at the default of 40 that
+      # is minutes of parsing per submission on a tenth of a core. Detection
+      # quality barely moves — the corpus still fills in, just over more
+      # submissions.
+      - key: PLAGIARISM_BACKFILL
+        value: "10"
+      - key: PLAGIARISM_POOL
+        value: "100"
+
+# No `databases:` block: PostgreSQL is hosted on Neon, not Render. Adding one
+# back would create a second database AND overwrite DATABASE_URL with it.
