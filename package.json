@@ -8,6 +8,7 @@
   },
   "scripts": {
     "build": "npm --prefix frontend install --include=dev && npm --prefix frontend run build && npm --prefix backend install --include=dev && npm --prefix backend run prisma:generate",
+    "build:server": "npm --prefix backend install --include=dev && npm --prefix backend run prisma:generate",
     "db:push": "npm --prefix backend run prisma:push",
     "db:seed": "npm --prefix backend run seed",
     "seed": "npm --prefix backend run seed",
