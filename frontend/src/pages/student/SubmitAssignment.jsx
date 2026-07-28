@@ -11,6 +11,7 @@ import { useTranslation } from 'react-i18next';
 import { assignmentsApi } from '../../api';
 import { useAuth } from '../../store/auth';
 import Loading from '../../components/Loading';
+import { apiError } from '../../utils/format';
 
 const { TextArea } = Input;
 const { Dragger } = Upload;
@@ -130,7 +131,7 @@ export default function SubmitAssignment() {
       const res = await assignmentsApi.submit(assignmentId, fd);
       navigate(`/student/submissions/${res.submission_id}`);
     } catch (e) {
-      message.error(e.response?.data?.message || t('submit.sendError'));
+      message.error(apiError(e, t('submit.sendError')));
       setSubmitting(false);
     }
   };

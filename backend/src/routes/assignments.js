@@ -34,6 +34,20 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage, limits: { fileSize: config.maxFileSize } });
 
+/**
+ * Deletes whatever the upload middleware already wrote to disk.
+ *
+ * Multer saves the files before the route runs a single one of its own checks,
+ * so a submission turned away for the wrong file type, a passed deadline or an
+ * exhausted attempt budget has already cost the uploads volume its 50 MB — and
+ * nothing in the database will ever refer to those files again. On a host with
+ * a persistent disk they accumulate for the life of the deployment.
+ */
+function discardUploads(req) {
+  for (const list of Object.values(req.files || {}))
+    for (const f of list || []) fs.unlink(f.path, () => {});
+}
+
 router.use(authRequired);
 
 /**
@@ -198,7 +212,11 @@ router.get('/my_submissions', async (req, res) => {
       overall_score: s.overallScore,
       teacher_score: s.teacherScore,
       final_score: finalScoreOf(s),
-      is_graded: s.overallScore !== null && (s.overallScore || 0) > 0,
+      // Graded means graded, including a hard-earned zero. Testing for `> 0`
+      // left work the grader rejected — an empty file, keyboard mash — showing
+      // "analyzing…" for ever, because the mark it was given was 0 and no
+      // further grading was ever going to change that.
+      is_graded: s.overallScore !== null,
       submitted_at: s.submittedAt ? s.submittedAt.toISOString() : null,
       attempt: s.attempt,
       max_attempts: MAX_ATTEMPTS,
@@ -546,17 +564,24 @@ router.post(
     { name: 'presentation_file', maxCount: 1 },
   ]),
   async (req, res) => {
+    // Every refusal below happens after the files are already on disk, so each
+    // one has to take them back off again.
+    const reject = (status, message) => {
+      discardUploads(req);
+      return res.status(status).json({ message });
+    };
+
     if (req.user.role !== 'student')
-      return res.status(403).json({ message: req.t('assignment.onlyStudents') });
+      return reject(403, req.t('assignment.onlyStudents'));
 
     const id = Number(req.params.id);
     const assignment = await prisma.assignment.findUnique({ where: { id } });
-    if (!assignment) return res.status(404).json({ message: req.t('common.notFound') });
+    if (!assignment) return reject(404, req.t('common.notFound'));
 
     // Before the window opens the door isn't open yet. A deadline extension
     // cannot help here — that moves the closing end, not the opening one.
     if (assignment.startAt && new Date() < assignment.startAt)
-      return res.status(400).json({ message: req.t('assignment.notStarted') });
+      return reject(400, req.t('assignment.notStarted'));
 
     // Past the deadline the door is closed — unless the teacher reopened the
     // assignment for this specific student with a per-student override that is
@@ -566,7 +591,7 @@ router.post(
         where: { assignmentId_studentId: { assignmentId: id, studentId: req.user.id } },
       });
       if (!ext || new Date() > ext.newDeadline)
-        return res.status(400).json({ message: req.t('assignment.deadlinePassed') });
+        return reject(400, req.t('assignment.deadlinePassed'));
     }
 
     // A student gets a fixed number of tries. The limit is enforced here rather
@@ -576,17 +601,15 @@ router.post(
       where: { assignmentId: id, studentId: req.user.id },
     });
     if (used >= MAX_ATTEMPTS)
-      return res.status(400).json({
-        message: req.t('assignment.attemptsExhausted', { max: MAX_ATTEMPTS }),
-      });
+      return reject(400, req.t('assignment.attemptsExhausted', { max: MAX_ATTEMPTS }));
 
     const mainFile = req.files?.file?.[0];
-    if (!mainFile) return res.status(400).json({ message: req.t('assignment.noFile') });
+    if (!mainFile) return reject(400, req.t('assignment.noFile'));
 
     const allowed = new Set(['.py', '.java', '.cpp', '.txt', '.pdf', '.js', '.doc', '.docx', '.ppt', '.pptx']);
     const ext = path.extname(mainFile.originalname).toLowerCase();
     if (!allowed.has(ext))
-      return res.status(400).json({ message: req.t('assignment.invalidFileType', { allowed: [...allowed].join(', ') }) });
+      return reject(400, req.t('assignment.invalidFileType', { allowed: [...allowed].join(', ') }));
 
     const flowchartPath = req.files?.flowchart_image?.[0]?.path || null;
     const presentationPath = req.files?.presentation_file?.[0]?.path || null;
@@ -611,9 +634,8 @@ router.post(
       // attempts; the unique index rejects the second. Report it as the attempt
       // limit rather than as a server fault, which is what it amounts to.
       if (e.code === 'P2002')
-        return res.status(409).json({
-          message: req.t('assignment.attemptsExhausted', { max: MAX_ATTEMPTS }),
-        });
+        return reject(409, req.t('assignment.attemptsExhausted', { max: MAX_ATTEMPTS }));
+      discardUploads(req);
       throw e;
     }
 
@@ -1107,7 +1129,9 @@ router.get('/export/:submission_id(\\d+)', async (req, res) => {
     student_name: submission.student?.fullName || submission.student?.username || 'Unknown',
     submitted_at: submission.submittedAt ? submission.submittedAt.toISOString() : 'N/A',
     overall_score: submission.overallScore || 0,
-    status: submission.overallScore ? 'Graded' : 'Pending',
+    // `null` is pending; 0 is a grade, and reporting it as pending would tell a
+    // student their rejected work was never marked.
+    status: submission.overallScore === null ? 'Pending' : 'Graded',
     ai_comment: submission.aiFeedbackSummary || 'No summary available.',
     plagiarism: {
       score: submission.plagiarismScore,

@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../store/auth';
 import { warmUp, isNetworkError } from '../api/client';
+import { apiError } from '../utils/format';
 import LanguageSwitcher from '../components/LanguageSwitcher';
 import { LogoFull } from '../components/Logo';
 
@@ -39,9 +40,7 @@ export default function Login() {
       // A dropped connection is not a wrong password, and saying "sign-in
       // failed" for it sends the user off checking credentials that were fine.
       message.error(
-        isNetworkError(e)
-          ? t('auth.connectionError')
-          : e.response?.data?.error || t('auth.loginError')
+        isNetworkError(e) ? t('auth.connectionError') : apiError(e, t('auth.loginError'))
       );
     } finally {
       clearTimeout(wakingTimer.current);

@@ -5,6 +5,7 @@ import {
 import { PlusOutlined, EditOutlined, DeleteOutlined, ReloadOutlined, CheckSquareOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { teacherApi } from '../../api';
+import { apiError } from '../../utils/format';
 
 // A teacher's reusable rubric library. Rows here are picked from when creating
 // an assignment; editing one never touches assignments already created.
@@ -50,7 +51,7 @@ export default function TeacherCriteria() {
       setOpen(false);
       load();
     } catch (e) {
-      message.error(e.response?.data?.message || t('common.error'));
+      message.error(apiError(e, t('common.error')));
     } finally {
       setSaving(false);
     }
@@ -61,7 +62,7 @@ export default function TeacherCriteria() {
       await teacherApi.deleteCriterion(id);
       message.success(t('teacher.criteriaDeleted'));
       load();
-    } catch (e) { message.error(e.response?.data?.message || t('common.error')); }
+    } catch (e) { message.error(apiError(e, t('common.error'))); }
   };
 
   const loadStandard = async () => {
@@ -69,7 +70,7 @@ export default function TeacherCriteria() {
       const all = await teacherApi.loadStandardCriteria();
       setRows(all);
       message.success(t('teacher.criteriaLoadedStandard'));
-    } catch (e) { message.error(e.response?.data?.message || t('common.error')); }
+    } catch (e) { message.error(apiError(e, t('common.error'))); }
   };
 
   const columns = [

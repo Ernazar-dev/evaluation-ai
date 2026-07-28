@@ -58,7 +58,7 @@ export default function AdminUsers() {
       if (editing) { await adminApi.updateUser(editing.id, payload); message.success(t('common.updated')); }
       else { await adminApi.createUser(payload); message.success(t('common.created')); }
       setOpen(false); load();
-    } catch (e) { message.error(e.response?.data?.error || t('common.error')); }
+    } catch (e) { message.error(apiError(e, t('common.error'))); }
   };
 
   const toggle = async (u) => {
@@ -70,7 +70,7 @@ export default function AdminUsers() {
   };
   const remove = async (u) => {
     try { await adminApi.deleteUser(u.id); load(); }
-    catch (e) { message.error(e.response?.data?.error || t('common.error')); }
+    catch (e) { message.error(apiError(e, t('common.error'))); }
   };
 
   const roleColor = { admin: 'gold', teacher: 'geekblue', student: 'blue' };

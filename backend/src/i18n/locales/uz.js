@@ -248,6 +248,12 @@ export default {
     penaltyCritical: 'Kritik pasaytirish: 4 tadan ortiq bo\'lim tashlab ketilgan.',
     penaltyNoFlowchart: 'Blok-sxema yo\'qligi uchun -10 ball jarima.',
     penaltyShortFile: 'Topshiriq fayli juda qisqa yoki mazmunli matn saqlamaydi.',
+    // Shown when the work turns out not to be writing at all.
+    nonsenseSummary:
+      'Yakuniy baho: 0/100. Topshirilgan ishda mazmunli matn yo\'q — bu topshiriqqa javob emas, balki tasodifiy harflar, takrorlanuvchi to\'ldiruvchi yoki shablon matn. Mezonlar bo\'yicha baholaydigan narsaning o\'zi yo\'q.',
+    nonsenseCriterion: 'Mazmunli matn yo\'q: bu mezon bo\'yicha baholaydigan narsa yo\'q.',
+    nonsenseAdvice:
+      'Ishni o\'z so\'zlaringiz bilan yozib, qaytadan topshiring — chin ko\'ngildan qilingan urinish, hatto to\'liq bo\'lmasa ham, mazmuniga qarab baholanadi.',
   },
 
   // Prompts sent to the model — they also fix the language of the AI's answer.

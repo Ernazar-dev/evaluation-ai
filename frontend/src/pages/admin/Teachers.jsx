@@ -3,6 +3,7 @@ import { Card, Table, Typography, Button, Space, Tag, Avatar, Breadcrumb, Select
 import { ArrowLeftOutlined, ReloadOutlined, UserOutlined, TeamOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { adminApi } from '../../api';
+import { apiError } from '../../utils/format';
 
 const { Title, Text } = Typography;
 
@@ -49,7 +50,7 @@ export default function AdminTeachers() {
       message.success(t('admin.groupAssigned'));
       await refreshGroups(teacher);
     } catch (e) {
-      message.error(e.response?.data?.error || t('common.error'));
+      message.error(apiError(e, t('common.error')));
     }
   };
 
@@ -60,7 +61,7 @@ export default function AdminTeachers() {
       message.success(t('admin.groupUnassigned'));
       await refreshGroups(teacher);
     } catch (e) {
-      message.error(e.response?.data?.error || t('common.error'));
+      message.error(apiError(e, t('common.error')));
     }
   };
 

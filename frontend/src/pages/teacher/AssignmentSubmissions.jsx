@@ -7,7 +7,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
 import { assignmentsApi } from '../../api';
-import { formatDateTime, formatDate } from '../../utils/format';
+import { apiError, formatDateTime, formatDate } from '../../utils/format';
 
 export default function AssignmentSubmissions() {
   const { t } = useTranslation();
@@ -53,7 +53,7 @@ export default function AssignmentSubmissions() {
       setModalOpen(false);
       load();
     } catch (e) {
-      message.error(e.response?.data?.message || t('teacher.extendError'));
+      message.error(apiError(e, t('teacher.extendError')));
     } finally {
       setSaving(false);
     }

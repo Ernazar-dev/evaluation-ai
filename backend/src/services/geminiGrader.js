@@ -19,8 +19,21 @@ function buildSchema(rows) {
   return {
     type: 'object',
     additionalProperties: false,
-    required: ['criteria', 'summary', 'strengths', 'improvements'],
+    // `meaningful` is required first so the model settles the question of whether
+    // there is real work here at all before it starts assigning numbers. Asked
+    // afterwards it tends to rationalise whatever scores it already wrote down.
+    required: ['meaningful', 'criteria', 'summary', 'strengths', 'improvements'],
     properties: {
+      meaningful: {
+        type: 'boolean',
+        description:
+          'Is this a genuine attempt at the assignment? Answer false when the submission ' +
+          'is not real writing at all — random letters or keyboard mashing ("vghbvjdjnd"), ' +
+          'the same word repeated to fill space, placeholder or lorem-ipsum text, or content ' +
+          'with no connection whatsoever to the assignment. Answer true for any honest ' +
+          'attempt, however weak, short or wrong: a poor answer is graded low, not dismissed. ' +
+          'When false, every criterion score must be 0.',
+      },
       criteria: {
         type: 'array',
         minItems: rows.length,
@@ -85,21 +98,33 @@ function systemInstruction(lang, hasReference) {
     '   vague or padded one does not.',
     '5. Be strict and consistent. Prefer under-rewarding weak work to over-rewarding it,',
     '   but never punish work that genuinely meets the criterion.',
+    '6. TEXT THAT IS NOT LANGUAGE SCORES ZERO. Random letters ("vghbvjdjnd ahdsjcndfj"),',
+    '   one word repeated to fill the page, placeholder or lorem-ipsum text, and content',
+    '   about an entirely different topic are all worth 0 — for every criterion, with no',
+    '   marks for effort, presentation or the fact that the box was filled in. Set',
+    '   "meaningful" to false in that case. Weak, short or partly wrong work is NOT this:',
+    '   it is a genuine attempt and is graded on the scale like anything else.',
+    '7. SCORE EACH CRITERION SEPARATELY, on the evidence for that criterion alone. Work is',
+    '   almost never equally good at everything: a submission with a solid algorithm and no',
+    '   flowchart must not receive the same number for both. Identical scores across every',
+    '   criterion mean you did not look at them individually — go back and look. Only let',
+    '   scores match when the evidence genuinely is the same (typically all-zero, when',
+    '   nothing was submitted at all).',
   ];
   if (hasReference) {
     rules.push(
-      '6. COURSE REFERENCE MATERIAL is provided below — authoritative passages from the',
+      '8. COURSE REFERENCE MATERIAL is provided below — authoritative passages from the',
       '   subject\'s textbooks. Treat it as the source of truth for factual correctness:',
       '   reward answers that agree with it, and mark down claims that contradict it or',
       '   that state as fact something the material shows to be wrong. Do NOT lower a score',
       '   merely because a correct answer is not word-for-word in the reference — the',
       '   reference is a subset of the syllabus, not the full set of acceptable answers.',
-      `7. Write every "feedback", "summary", "strengths" and "improvements" value in ${language}.`,
+      `9. Write every "feedback", "summary", "strengths" and "improvements" value in ${language}.`,
       '   Keep the "key" values exactly as given, in their original spelling.'
     );
   } else {
     rules.push(
-      `6. Write every "feedback", "summary", "strengths" and "improvements" value in ${language}.`,
+      `8. Write every "feedback", "summary", "strengths" and "improvements" value in ${language}.`,
       '   Keep the "key" values exactly as given, in their original spelling.'
     );
   }
@@ -173,6 +198,7 @@ export async function gradeWithGemini({
   fileText,
   calibration = [],
   reference = '',
+  qualityNote = '',
   lang = DEFAULT_LANG,
 }) {
   if (!isConfigured()) throw new Error('Gemini is not configured');
@@ -220,6 +246,11 @@ export async function gradeWithGemini({
       ].join('\n'),
     });
   }
+
+  // What the mechanical text scan made of the submission, when it found anything
+  // worth mentioning. It goes in before the rubric so the model reads it as
+  // context about the work, not as an instruction about the grade.
+  if (String(qualityNote || '').trim()) input.push({ type: 'text', text: qualityNote });
 
   input.push({
     type: 'text',
@@ -294,7 +325,16 @@ function verifySystemInstruction(lang) {
     '2. If a criterion was clearly under-scored despite real supporting evidence, raise it.',
     '3. If the proposed score is already fair and well-evidenced, keep it unchanged.',
     '4. Grade ONLY the criteria given; never invent new ones.',
-    `5. Write "reasoning", "feedback", "summary", "strengths" and "improvements" in ${language}.`,
+    '5. Judge "meaningful" for yourself from the work, whatever the first pass concluded.',
+    '   It is false only when the submission is not real writing at all — random letters',
+    '   ("vghbvjdjnd ahdsjcndfj"), one word repeated to fill space, placeholder text, or',
+    '   content about an entirely different subject — and then every score is 0, with no',
+    '   marks for effort or presentation. Weak, short or partly wrong work is a genuine',
+    '   attempt: mark it low if it deserves that, but "meaningful" stays true.',
+    '6. Scores must differ where the evidence differs. If the first pass gave the same',
+    '   number to every criterion, that is a sign it did not examine them separately —',
+    '   check each one against the work and correct the ones that do not fit.',
+    `7. Write "reasoning", "feedback", "summary", "strengths" and "improvements" in ${language}.`,
     '   Keep the "key" values exactly as given.',
   ].join('\n');
 }
@@ -303,6 +343,8 @@ function verifySystemInstruction(lang) {
 function renderProposedGrading(draft, rows) {
   const byKey = new Map(rows.map((r) => [r.key, r]));
   const lines = ['FIRST-PASS GRADING TO AUDIT (verify each entry against the work):'];
+  if (draft.meaningful === false)
+    lines.push('The first pass judged this submission not to be a genuine attempt at all.');
   draft.criteria.forEach((c, i) => {
     const max = byKey.get(c.key)?.maxScore ?? c.maxScore ?? 100;
     lines.push(`${i + 1}. [key: ${c.key}] ${c.name}: proposed ${c.score}/${max}`);
@@ -334,6 +376,13 @@ async function verifyGrading({ input, rows, draft, lang }) {
 function mergeSamples(samples, rows, lang) {
   const byKey = new Map(rows.map((r) => [r.key, r]));
 
+  // A verdict of "this is not a real attempt" only stands if most of the runs
+  // reached it. One run out of three calling genuine work nonsense is noise, and
+  // the cost of believing it — a zero on real coursework — is far higher than
+  // the cost of grading mash on its (nonexistent) merits.
+  const votes = samples.filter((s) => s.meaningful === false).length;
+  const meaningful = !(votes * 2 > samples.length);
+
   const criteria = rows.map((row) => {
     const picks = samples
       .map((s) => (s.criteria || []).find((c) => c.key === row.key))
@@ -352,7 +401,11 @@ function mergeSamples(samples, rows, lang) {
       };
     }
 
-    const scores = picks.map((p) => clamp(Number(p.score) || 0, 0, row.maxScore));
+    // The model is told that nothing meaningful means zero everywhere, but it is
+    // not reliable about carrying that through to nine separate numbers — it
+    // will call a submission gibberish and still award it 20 for structure.
+    // Enforcing it here is what makes the verdict actually cost the marks.
+    const scores = picks.map((p) => (meaningful ? clamp(Number(p.score) || 0, 0, row.maxScore) : 0));
     const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
     // Keep the prose from the run closest to the average, so text and number agree.
     const closest = picks[nearestIndex(scores, avg)];
@@ -377,6 +430,7 @@ function mergeSamples(samples, rows, lang) {
   return {
     criteria,
     total,
+    meaningful,
     summary: String(primary.summary || '').trim(),
     strengths: (primary.strengths || []).map(String).filter(Boolean),
     improvements: (primary.improvements || []).map(String).filter(Boolean),

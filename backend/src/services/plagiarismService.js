@@ -568,7 +568,11 @@ export async function checkPlagiarism({ submissionId, studentId, assignment, com
       let ai = null;
       let text = '';
 
-      if (useAi && (aiBudget > 0 || cand.detection >= config.plagAiMinSimilarity)) {
+      // Reading a candidate means re-parsing its PDF from disk, so it is only
+      // worth doing while there is still an AI call left to spend on it: the
+      // vocabulary figure below exists to decide whether to make that call, and
+      // with the budget gone it would be computed and thrown away.
+      if (useAi && aiBudget > 0) {
         text = await loadCandidateText(cand.row);
         lexical = lexicalSimilarity(suspectWords, tokenize(text).norm);
       }

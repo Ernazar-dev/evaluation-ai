@@ -22,6 +22,7 @@ import { gradeWithGemini } from './geminiGrader.js';
 import { isConfigured as geminiConfigured } from './geminiClient.js';
 import { getSubjectReference } from './knowledgeBase.js';
 import { extractFileContent } from './fileParser.js';
+import { analyzeSubmission, qualityNote } from './textQuality.js';
 import {
   buildComparisonText,
   checkPlagiarism,
@@ -67,8 +68,26 @@ export async function processSubmission({
       lang,
     });
 
+    // Is there any writing here to grade? A submission of keyboard mash used to
+    // come back with a comfortable pass, because every engine downstream measures
+    // how much text there is and not whether it means anything. When the scan is
+    // certain, the zero is awarded here and no model is called at all.
+    const quality = analyzeSubmission({
+      sectionsData,
+      fileText,
+      documentUnreadable: !!(filePath || submission.filePath) && !fileExtracted,
+    });
+
     let result = null;
-    if (geminiConfigured()) {
+    if (quality.verdict === 'nonsense') {
+      result = nonsenseGrade(rows, lang);
+      console.log(
+        `Submission ${submission.id} scored 0 without grading: ${quality.reason} are not language ` +
+          `(${Math.round((quality.reason === 'document' ? quality.file : quality.answers).gibberishRatio * 100)}% non-words)`
+      );
+    }
+
+    if (!result && geminiConfigured()) {
       try {
         const calibration = await loadCalibration(assignmentId);
         const reference = await loadReference({ assignment, sectionsData, fileText });
@@ -81,6 +100,7 @@ export async function processSubmission({
           fileText,
           calibration,
           reference,
+          qualityNote: qualityNote(quality),
           lang,
         });
         result = {
@@ -434,10 +454,42 @@ function buildCustomSummary(criteria, finalScore, lang) {
   return lines.join('\n');
 }
 
+/**
+ * The grade for a submission that contains no writing at all: zero on every
+ * criterion, and a report that says plainly why and what to do about it.
+ *
+ * It reuses the ordinary criteria shape, so the teacher's review screen, the PDF
+ * export and the rating all treat this like any other grade — the student can
+ * still resubmit, and only their best attempt counts.
+ */
+function nonsenseGrade(rows, lang) {
+  const criteria = rows.map((row) => ({
+    key: row.key,
+    name: row.name,
+    criterionId: row.id ?? null,
+    score: 0,
+    maxScore: row.maxScore ?? 100,
+    weight: row.weight ?? null,
+    evidence: null,
+    feedback: t(lang, 'ai.nonsenseCriterion'),
+  }));
+
+  const lines = [`Summary: ${t(lang, 'ai.nonsenseSummary')}`, '', t(lang, 'ai.nonsenseAdvice')];
+  lines.push('', t(lang, 'ai.perPointHeader'));
+  criteria.forEach((c, i) => {
+    lines.push(`${i + 1}) ${c.name}: 0/${c.maxScore} — ${c.feedback}`);
+  });
+
+  return { criteria, score: 0, feedback: lines.join('\n'), engine: 'quality-check' };
+}
+
 /** Turns the structured Gemini result into the report text students read. */
 function formatGeminiReport(graded, lang) {
   const lines = [];
   if (graded.summary) lines.push(`Summary: ${graded.summary}`);
+  // The model wrote its own explanation above; this adds the one thing it has no
+  // way to know — that resubmitting real work is worth the student's while.
+  if (graded.meaningful === false) lines.push('', t(lang, 'ai.nonsenseAdvice'));
   if (graded.strengths.length)
     lines.push('', `**${t(lang, 'ai.strengthsLabel')}**`, ...graded.strengths.map((s) => `• ${s}`));
   if (graded.improvements.length)

@@ -10,7 +10,7 @@ import { assignmentsApi } from '../api';
 import { useAuth } from '../store/auth';
 import Loading from '../components/Loading';
 import PlagiarismCard from '../components/PlagiarismCard';
-import { formatDateTime } from '../utils/format';
+import { apiError, formatDateTime } from '../utils/format';
 
 const scoreColor = (s) => (s >= 85 ? '#52c41a' : s >= 70 ? '#0958d9' : s >= 50 ? '#faad14' : '#ff4d4f');
 const POLL_MS = 5000; // auto-refresh interval while AI grading runs in the background
@@ -18,6 +18,7 @@ const POLL_MS = 5000; // auto-refresh interval while AI grading runs in the back
 /** "gemini:gemini-3.5-flash" means nothing to a student — say what happened. */
 function gradedByLabel(engine, t) {
   if (engine === 'error') return t('detail.gradedByError');
+  if (engine === 'quality-check') return t('detail.gradedByNoContent');
   if (engine?.startsWith('gemini:')) return t('detail.gradedByAi');
   return t('detail.gradedByBasic');
 }
@@ -83,7 +84,7 @@ export default function SubmissionDetail() {
       setReview(null);
       await load(true);
     } catch (e) {
-      message.error(e.response?.data?.message || t('common.error'));
+      message.error(apiError(e, t('common.error')));
     } finally { setSaving(false); }
   };
 
@@ -97,7 +98,7 @@ export default function SubmissionDetail() {
       await load(true);
       message.success(t('plagiarism.recheckDone'));
     } catch (e) {
-      message.error(e.response?.data?.message || t('common.error'));
+      message.error(apiError(e, t('common.error')));
     } finally { setRechecking(false); }
   };
 

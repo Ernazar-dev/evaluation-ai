@@ -248,6 +248,12 @@ export default {
     penaltyCritical: 'Critical reduction: more than 4 sections were skipped.',
     penaltyNoFlowchart: '-10 point penalty for a missing flowchart.',
     penaltyShortFile: 'The submitted file is too short or holds no meaningful text.',
+    // Shown when the work turns out not to be writing at all.
+    nonsenseSummary:
+      'Final score: 0/100. The submitted work contains no meaningful text — it is random characters, repeated filler or placeholder content rather than an answer to the assignment. Nothing here could be graded against the criteria.',
+    nonsenseCriterion: 'No meaningful content: there is nothing here to grade against this criterion.',
+    nonsenseAdvice:
+      'Write the work out properly in your own words and submit it again — a real attempt, however incomplete, is graded on its merits.',
   },
 
   // Prompts sent to the model — they also fix the language of the AI's answer.

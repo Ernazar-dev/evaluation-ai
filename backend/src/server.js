@@ -30,6 +30,29 @@ const server = app.listen(config.port, '0.0.0.0', () => {
     engine = 'Mock fallback';
   }
   console.log(`AI grading: ${engine}`);
+
+  // The JWT secret is what makes a login token unforgeable. Left at the
+  // built-in default, or at the placeholder .env.example ships, it is a string
+  // anyone who has read this repository already knows — and knowing it is
+  // enough to mint a token for any account on the platform, admin included.
+  //
+  // Only values that are actually published are treated as a finding, plus a
+  // floor on length; guessing at how random a private secret "looks" would cry
+  // wolf on perfectly good ones. Warned rather than enforced, because refusing
+  // to boot would take a running deployment offline over something the host's
+  // environment panel fixes in a minute.
+  const PUBLISHED_SECRETS = ['dev-secret-change-me', 'replace-with-a-long-random-secret'];
+  const weakSecret = PUBLISHED_SECRETS.includes(config.jwtSecret)
+    ? 'it is the example value from this repository, so anyone can forge a login token'
+    : config.jwtSecret.length < 32
+      ? 'it is short enough to be worth guessing'
+      : null;
+  if (weakSecret) {
+    console.warn(`!! JWT_SECRET is unsafe: ${weakSecret}.`);
+    console.warn(
+      "!! Generate one:  node -e \"console.log(require('crypto').randomBytes(48).toString('hex'))\""
+    );
+  }
   if (quotaNote) console.log(quotaNote);
   if (config.kbEnabled) console.log(`Knowledge base: on (${config.kbDir})`);
   if (config.plagEnabled) {

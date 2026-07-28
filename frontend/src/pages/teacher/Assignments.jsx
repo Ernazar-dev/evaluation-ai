@@ -99,7 +99,7 @@ export default function TeacherAssignments() {
       message.success(t('teacher.assignmentCreated'));
       closeWizard();
       load();
-    } catch (e) { message.error(e.response?.data?.message || t('common.error')); }
+    } catch (e) { message.error(apiError(e, t('common.error'))); }
   };
 
   const remove = async (id) => {
@@ -146,7 +146,7 @@ export default function TeacherAssignments() {
       setEditOpen(false);
       load();
     } catch (e) {
-      message.error(e.response?.data?.message || t('common.error'));
+      message.error(apiError(e, t('common.error')));
     } finally {
       setEditSaving(false);
     }

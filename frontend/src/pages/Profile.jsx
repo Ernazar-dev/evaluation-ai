@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Card, Form, Input, Button, message, Divider, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { usersApi } from '../api';
-import { formatUzPhone, UZ_PHONE_RE } from '../utils/format';
+import { apiError, formatUzPhone, UZ_PHONE_RE } from '../utils/format';
 
 export default function Profile() {
   const { t } = useTranslation();
@@ -27,7 +27,7 @@ export default function Profile() {
       await usersApi.changePassword(values);
       message.success(t('profile.passwordChanged'));
       pwdForm.resetFields();
-    } catch (e) { message.error(e.response?.data?.error || t('common.error')); }
+    } catch (e) { message.error(apiError(e, t('common.error'))); }
   };
 
   return (

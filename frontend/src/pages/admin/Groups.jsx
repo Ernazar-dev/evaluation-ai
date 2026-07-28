@@ -29,7 +29,7 @@ export default function AdminGroups() {
       if (editing) { await adminApi.updateGroup(editing.id, values); message.success(t('common.updated')); }
       else { await adminApi.createGroup(values); message.success(t('common.created')); }
       setOpen(false); setEditing(null); form.resetFields(); load();
-    } catch (e) { message.error(e.response?.data?.error || t('common.error')); }
+    } catch (e) { message.error(apiError(e, t('common.error'))); }
   };
   const remove = async (id) => {
     try { await adminApi.deleteGroup(id); message.success(t('common.deleted')); }

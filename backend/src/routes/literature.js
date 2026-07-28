@@ -92,6 +92,11 @@ router.delete('/:id(\\d+)', roleRequired('teacher', 'admin'), async (req, res) =
   const book = await prisma.book.findUnique({ where: { id: Number(req.params.id) } });
   if (!book) return res.status(404).json({ message: req.t('common.notFound') });
   await prisma.book.delete({ where: { id: book.id } });
+  // The row that pointed at them is gone, so nothing will ever open these
+  // again. PUT already removes the files it replaces; deleting has to as well,
+  // or every removed textbook stays on the uploads volume for good.
+  if (book.filePath) fs.unlink(book.filePath, () => {});
+  if (book.coverImage) fs.unlink(book.coverImage, () => {});
   res.json({ message: req.t('literature.bookDeleted') });
 });
 

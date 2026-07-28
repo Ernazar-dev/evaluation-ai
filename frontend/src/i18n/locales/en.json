@@ -244,7 +244,8 @@
     "expandHint": "Click a section to expand it",
     "gradedByAi": "Graded by AI",
     "gradedByBasic": "Simplified check",
-    "gradedByError": "Grading error"
+    "gradedByError": "Grading error",
+    "gradedByNoContent": "No meaningful content"
   },
   "plagiarism": {
     "title": "Originality check (anti-plagiarism)",

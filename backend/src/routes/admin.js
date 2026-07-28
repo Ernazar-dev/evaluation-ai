@@ -292,6 +292,10 @@ router.put('/groups/:id(\\d+)', async (req, res) => {
     // A duplicate name trips Prisma's unique constraint (P2002) — report it as a
     // clean validation error rather than a 500.
     if (e.code === 'P2002') return res.status(400).json({ error: req.t('admin.groupExists') });
+    // P2025: the group was deleted in another tab between the page loading and
+    // the save. That is a 404, not a server fault.
+    if (e.code === 'P2025') return res.status(404).json({ message: req.t('common.notFound') });
+    console.error('Group update failed:', e.message);
     res.status(500).json({ error: req.t('common.error') });
   }
 });

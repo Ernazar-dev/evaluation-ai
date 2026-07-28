@@ -244,7 +244,8 @@
     "expandHint": "Ochish uchun bo'lim ustiga bosing",
     "gradedByAi": "AI baholadi",
     "gradedByBasic": "Soddalashtirilgan tekshiruv",
-    "gradedByError": "Baholashda xatolik"
+    "gradedByError": "Baholashda xatolik",
+    "gradedByNoContent": "Mazmunli matn yo'q"
   },
   "plagiarism": {
     "title": "Originallik tekshiruvi (antiplagiat)",

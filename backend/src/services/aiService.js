@@ -3,6 +3,7 @@
 // mock fallback so the platform keeps working without an API key.
 
 import config from '../config.js';
+import { analyzeText } from './textQuality.js';
 import { t, DEFAULT_LANG, sectionTitle } from '../i18n/index.js';
 
 const FALLBACK_MODELS = [
@@ -64,32 +65,81 @@ async function callOpenRouter(messages) {
   return 'MOCK_FALLBACK';
 }
 
+const clamp01 = (n) => Math.max(0, Math.min(1, n));
+
+/**
+ * How much substance a piece of writing shows, from 0 to 1, judged without
+ * understanding a word of it.
+ *
+ * This exists because the fallback scorer used to look only at length, so every
+ * section over 300 characters came back with exactly 65 — nine identical marks
+ * on a report that claims to grade nine different things. These signals are
+ * crude, but they are signals a keyboard-masher and a padder do not produce,
+ * and they differ from section to section, which is the point: the numbers
+ * spread out according to something in the text rather than sitting on a step.
+ */
+function substanceOf(text) {
+  const words = String(text || '')
+    .toLowerCase()
+    .split(/[^\p{L}\p{N}']+/u)
+    .filter((w) => w.length > 1);
+  if (words.length < 5) return 0;
+
+  // Real prose reuses words; filler reuses them far more. Around 0.6 unique is
+  // ordinary for a paragraph of academic writing, so that is where this tops out.
+  const diversity = clamp01(new Set(words).size / words.length / 0.6);
+  // Complete sentences: an argument that is developed rather than a list of nouns.
+  const sentences = String(text).split(/[.!?…\n]+/).filter((s) => s.trim().length > 15).length;
+  const structure = clamp01(sentences / 6);
+  // Long words stand in for subject terminology across all three languages.
+  const technical = clamp01(words.filter((w) => w.length >= 8).length / words.length / 0.18);
+  // Figures, dates, equations, reference numbers — the marks of specific content.
+  const specifics = /\d/.test(text) ? 1 : 0;
+
+  return clamp01(0.4 * diversity + 0.3 * structure + 0.2 * technical + 0.1 * specifics);
+}
+
+/**
+ * Scores a section with no model available. It cannot judge whether an answer is
+ * *correct* — only whether it is written work at all, and how much of it there
+ * is — so it stays well below full marks however good the text looks.
+ */
 function mockEvaluate(sectionName, content = '', lang = DEFAULT_LANG) {
   const clean = (content || '').replace('[Image uploaded]', '').trim();
   const len = clean.length;
-  let score;
+  const visual = ['Flowchart', 'Result of the created program'].includes(sectionName);
+
+  // Before any credit for length: is this language? "vghbvjdjnd ahdsjcndfj"
+  // repeated to 400 characters used to score 65 here, and the student learned
+  // that filling the box was enough.
+  const quality = analyzeText(clean);
+  if (quality.verdict === 'nonsense')
+    return { score: 0, feedback: `[System Fallback] ${t(lang, 'ai.nonsenseCriterion')}` };
+
+  if ((content || '').includes('[Image uploaded]'))
+    return { score: 75, feedback: `[System Fallback] ${t(lang, 'ai.imageReceived')}` };
+
+  if (len < 10 && !visual)
+    return { score: 0, feedback: `[System Fallback] ${t(lang, 'ai.sectionEmpty')}` };
+
+  // The band comes from length, the position within it from the signals above,
+  // so two sections of the same length no longer score the same.
+  let lo;
+  let hi;
   let key;
-
-  if (len < 10 && !['Flowchart', 'Result of the created program'].includes(sectionName)) {
-    score = 0;
-    key = 'ai.sectionEmpty';
-  } else if (len < 100) {
-    score = 30;
-    key = 'ai.tooShort';
+  if (len < 100) {
+    [lo, hi, key] = [20, 35, 'ai.tooShort'];
   } else if (len < 300) {
-    score = 55;
-    key = 'ai.basicDescription';
+    [lo, hi, key] = [40, 55, 'ai.basicDescription'];
   } else {
-    score = 65;
-    key = 'ai.contentNoAnalysis';
+    [lo, hi, key] = [50, 68, 'ai.contentNoAnalysis'];
   }
 
-  if ((content || '').includes('[Image uploaded]')) {
-    score = 75;
-    key = 'ai.imageReceived';
-  }
+  let score = lo + (hi - lo) * substanceOf(clean);
+  // Part-gibberish is graded on the part that is writing, not on the whole.
+  if (quality.gibberishRatio > 0) score *= 1 - quality.gibberishRatio;
 
-  return { score, feedback: `[System Fallback] ${t(lang, key)}` };
+  return { score: Math.round(score), feedback: `[System Fallback] ${t(lang, key)}` };
 }
 
 function commentForScore(score, lang) {
@@ -143,6 +193,12 @@ export async function evaluateSection(sectionName, content, fileContent = null, 
   if (!['Flowchart', 'Result of the created program'].includes(sectionName) && clean.length < 20)
     return { score: 5, feedback: t(lang, 'ai.almostEmpty') };
 
+  // Text that is not language costs no API call and earns no marks. The models
+  // behind this path are small and eager to please: asked to grade
+  // "vghbvjdjnd ahdsjcndfj" they hand out marks for effort rather than refusing.
+  const quality = analyzeText(clean);
+  if (quality.verdict === 'nonsense') return { score: 0, feedback: t(lang, 'ai.nonsenseCriterion') };
+
   const fileCtx = fileContent ? fileContent.slice(0, 3000) : t(lang, 'ai.noFileContext');
 
   // The prompt lives in the locale files so the model answers in the student's language.
@@ -165,6 +221,9 @@ export async function evaluateSection(sectionName, content, fileContent = null, 
     const result = JSON.parse(text);
     let score = Number(result.score || 0);
     score = Math.max(0, Math.min(100, score));
+    // Same rule as the offline scorer: where part of the answer is not writing,
+    // only the part that is can earn marks.
+    if (quality.gibberishRatio > 0) score = Math.round(score * (1 - quality.gibberishRatio));
     return { score, feedback: result.feedback || t(lang, 'ai.noComment') };
   } catch (e) {
     return mockEvaluate(sectionName, content, lang);
