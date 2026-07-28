@@ -1,4 +1,4 @@
-// AI Assistant Platform — MySQL/MariaDB schema (Prisma)
+// AI Assistant Platform — PostgreSQL schema (Prisma)
 // Ported 1:1 from the original Flask/SQLAlchemy models.
 
 generator client {
@@ -6,7 +6,7 @@ generator client {
 }
 
 datasource db {
-  provider = "mysql"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -253,7 +253,7 @@ model Submission {
   /// Space-free run of 8-hex-char word-shingle hashes. This is what every later
   /// submission is compared against, so a work stays in the corpus for good
   /// without keeping its full text around a second time.
-  fingerprint         String?   @db.LongText
+  fingerprint         String?
   /// How many words the fingerprint was built from — a submission too short to
   /// judge is recorded as checked rather than silently treated as clean.
   fingerprintWords    Int?      @map("fingerprint_words")
@@ -309,7 +309,7 @@ model PlagiarismMatch {
   /// Why the AI ruled the way it did, in the student's language.
   explanation         String?  @db.Text
   /// JSON array of {suspect, source} passage pairs that matched.
-  snippets            String?  @db.LongText
+  snippets            String?
   createdAt           DateTime @default(now()) @map("created_at")
 
   submission        Submission  @relation("PlagiarismSuspect", fields: [submissionId], references: [id], onDelete: Cascade)
@@ -328,7 +328,7 @@ model SectionScore {
   score        Float?
   maxScore     Int?    @map("max_score")
   weight       Float? // weight snapshot, so an edited rubric can't rewrite history
-  content      String? @db.LongText
+  content      String?
   feedback     String? @db.Text
   /// Verbatim quote from the student's work backing this score. Required of the
   /// model so a teacher can verify the grade instead of trusting it.
