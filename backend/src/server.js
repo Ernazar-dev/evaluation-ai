@@ -48,6 +48,28 @@ const server = app.listen(config.port, '0.0.0.0', () => {
   failStalledSubmissions().catch((e) => console.error('stalled sweep failed', e));
 });
 
+// The ERR_CONNECTION_CLOSED fix.
+//
+// Render puts a proxy in front of this process and keeps idle upstream
+// connections open for about a minute, reusing them for later requests. Node's
+// default keep-alive timeout is FIVE SECONDS. So on a quiet site the sequence
+// is: the proxy holds a connection, Node closes it at 5s, the proxy sends the
+// next request down that same socket, and the browser gets a closed connection
+// with no response at all — net::ERR_CONNECTION_CLOSED — with nothing in the
+// server log, because the request never reached Express. The login page is
+// where it shows up first: it is the first request after an idle spell.
+//
+// The cure is to outlive the proxy: keep sockets alive longer than it does, and
+// keep headersTimeout above that again (Node aborts a connection whose headers
+// are not complete within it, so a shorter value would re-introduce the drop).
+server.keepAliveTimeout = 120000; // 120s > Render's ~60s idle window
+server.headersTimeout = 125000; // must stay above keepAliveTimeout
+// Left at Node's five-minute default deliberately: requestTimeout measures how
+// long the *whole request body* may take to arrive, and a 50 MB submission over
+// a phone connection legitimately takes minutes. A shorter value here would cut
+// students off mid-upload. It matches the frontend's upload timeout.
+server.requestTimeout = 300000;
+
 // Background work (grading, the originality check) runs detached from the
 // request that started it, so a rejection there has no `next()` to fall into.
 // Requests are already covered by lib/asyncRouter.js; this is the net under

@@ -88,7 +88,9 @@
     "enterUsername": "Enter your username",
     "enterPassword": "Enter your password",
     "fullName": "Full name",
-    "adminOnlyHint": "Accounts are created by the administrator only"
+    "adminOnlyHint": "Accounts are created by the administrator only",
+    "connectionError": "Could not reach the server. Check your connection and try again.",
+    "waking": "Waking the server up, one moment…"
   },
   "student": {
     "greeting": "Hello, {{name}}!",

@@ -14,7 +14,11 @@ export function appendAdminLog(action, actor, detailsKey, params) {
   try {
     const ts = new Date().toISOString().replace('T', ' ').slice(0, 19);
     const details = t(DEFAULT_LANG, detailsKey, params);
-    fs.appendFileSync(ADMIN_LOG, `${ts} | ${action} | ${actor} | ${details}\n`, 'utf-8');
+    // Asynchronous on purpose. This runs inside request handlers, and a
+    // synchronous write blocks the whole event loop — on the 0.1 CPU of a free
+    // instance that is a pause every other request pays for. Nothing waits on
+    // the audit line, so it can land whenever the disk gets to it.
+    fs.appendFile(ADMIN_LOG, `${ts} | ${action} | ${actor} | ${details}\n`, 'utf-8', () => {});
   } catch (e) {
     // non-fatal
   }

@@ -27,10 +27,28 @@ export const useAuth = create((set, get) => ({
     try {
       const me = await authApi.me();
       set({ user: me, role: me.role });
-    } catch {
-      localStorage.removeItem('token');
-      localStorage.removeItem('role');
-      set({ user: null, token: null, role: null });
+    } catch (e) {
+      // Only a server that actually rejected the token ends the session.
+      //
+      // Treating every failure as "logged out" is what put returning users back
+      // on the login page: the free host sleeps, their first request is dropped
+      // before it reaches the server, and a perfectly valid token was thrown
+      // away for a problem that had nothing to do with it. Signing in again did
+      // not help either — the same cold instance dropped that request too.
+      //
+      // The client already retried this request; if it still could not reach
+      // the server, keep the session and let the next screen retry. A 5xx is
+      // the server having a bad moment, which says nothing about the token
+      // either — only 401/403 is an answer about this session.
+      const status = e.response?.status;
+      const rejected = status === 401 || status === 403;
+      if (rejected) {
+        localStorage.removeItem('token');
+        localStorage.removeItem('role');
+        set({ user: null, token: null, role: null });
+      } else {
+        set({ user: null });
+      }
     } finally {
       set({ loading: false, initialized: true });
     }

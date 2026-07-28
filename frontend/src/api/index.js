@@ -1,7 +1,9 @@
 import api from './client';
 
 export const authApi = {
-  login: (data) => api.post('/auth/login', data).then((r) => r.data),
+  // `retry` because this is the request that meets a sleeping server first, and
+  // repeating it is harmless — signing in twice leaves you signed in once.
+  login: (data) => api.post('/auth/login', data, { retry: true }).then((r) => r.data),
   me: () => api.get('/auth/me').then((r) => r.data),
   logout: () => api.post('/auth/logout').then((r) => r.data),
 };

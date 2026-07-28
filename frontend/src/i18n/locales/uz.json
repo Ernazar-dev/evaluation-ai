@@ -88,7 +88,9 @@
     "enterUsername": "Foydalanuvchi nomini kiriting",
     "enterPassword": "Parolni kiriting",
     "fullName": "To'liq ism",
-    "adminOnlyHint": "Hisoblar faqat administrator tomonidan yaratiladi"
+    "adminOnlyHint": "Hisoblar faqat administrator tomonidan yaratiladi",
+    "connectionError": "Serverga ulanib bo‘lmadi. Internetni tekshirib, qaytadan urinib ko‘ring.",
+    "waking": "Server uyg‘onmoqda, biroz kuting…"
   },
   "student": {
     "greeting": "Salom, {{name}}!",

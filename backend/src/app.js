@@ -71,13 +71,25 @@ export function createApp() {
   app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 
   // Throttle credential endpoints so passwords cannot be brute-forced.
+  //
+  // Counted per IP *and* username, not per IP alone: a computer lab reaches this
+  // server through one NAT address, so an IP-only budget is shared by the whole
+  // room — thirty students signing in for a class would lock each other out
+  // after the twentieth, each of them on their first attempt. Per username, the
+  // limit still does its job (guessing one account's password is what it is
+  // there to stop) without one user's typos costing anyone else their login.
   const authLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 20,
     standardHeaders: true,
     legacyHeaders: false,
+    keyGenerator: (req) => `${req.ip}|${String(req.body?.username || '').toLowerCase()}`,
+    // A correct password is not an attack. Only failures count, so a working
+    // account is never locked out by the number of times it signs in.
+    skipSuccessfulRequests: true,
     handler: (req, res) => res.status(429).json({ error: req.t('auth.tooManyAttempts') }),
   });
+  // Mounted after express.json so keyGenerator can see req.body.username.
   app.use('/auth/login', authLimiter);
 
   // API routes — prefixes match the original Flask blueprints

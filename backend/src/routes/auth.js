@@ -30,9 +30,15 @@ router.post('/login', async (req, res) => {
     return res.status(401).json({ error: req.t('auth.invalidCredentials') });
   if (!user.isActive) return res.status(403).json({ error: req.t('auth.accountBlocked') });
 
-  await prisma.user.update({ where: { id: user.id }, data: { lastSeen: new Date() } });
+  // Bookkeeping, not part of the answer. Awaiting these put two more round-trips
+  // to a possibly cold database between the correct password and the response —
+  // seconds of spinner on a free tier, and a login that fails outright if the
+  // audit write does. Fire them off and reply now; both already swallow errors.
+  prisma.user
+    .update({ where: { id: user.id }, data: { lastSeen: new Date() } })
+    .catch(() => {});
   appendAdminLog('LOGIN', user.username, 'log.login', { role: user.role });
-  await logActivity(user.id, 'LOGIN', 'log.login', { role: user.role }, req.ip);
+  logActivity(user.id, 'LOGIN', 'log.login', { role: user.role }, req.ip);
 
   res.json({
     token: signToken(user),
