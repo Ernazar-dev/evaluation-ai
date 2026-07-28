@@ -1,4 +1,4 @@
-// AI Assistant Platform — PostgreSQL schema (Prisma)
+// AI Assistant Platform — MySQL/MariaDB schema (Prisma)
 // Ported 1:1 from the original Flask/SQLAlchemy models.
 
 generator client {
@@ -6,7 +6,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "mysql"
   url      = env("DATABASE_URL")
 }
 
@@ -29,18 +29,18 @@ model User {
 
   profile             UserProfile?
   submissions         Submission[]
-  reviewedSubmissions Submission[]     @relation("SubmissionReviewer")
+  reviewedSubmissions Submission[]        @relation("SubmissionReviewer")
   notifications       Notification[]
   academicRatings     AcademicRating[]
   studentSubjects     StudentSubject[]
   teacherSubjects     TeacherSubject[]
   activityLogs        ActivityLog[]
   news                News[]
-  managedGroups       Group[]          @relation("GroupTeacher")
+  managedGroups       Group[]             @relation("GroupTeacher")
   assignments         Assignment[]
   criterionTemplates  CriterionTemplate[]
-  teacherStudents     TeacherStudent[] @relation("TS_Teacher")
-  studentTeachers     TeacherStudent[] @relation("TS_Student")
+  teacherStudents     TeacherStudent[]    @relation("TS_Teacher")
+  studentTeachers     TeacherStudent[]    @relation("TS_Student")
   bookDownloads       BookDownload[]
   deadlineExtensions  DeadlineExtension[]
   plagiarismFlags     PlagiarismMatch[]
@@ -65,7 +65,7 @@ model Group {
 model Department {
   id          Int      @id @default(autoincrement())
   name        String   @unique
-  description String?
+  description String?  @db.Text
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @default(now()) @updatedAt @map("updated_at")
 
@@ -79,7 +79,7 @@ model Subject {
   id           Int      @id @default(autoincrement())
   name         String
   code         String?  @unique
-  description  String?
+  description  String?  @db.Text
   departmentId Int?     @map("department_id")
   createdAt    DateTime @default(now()) @map("created_at")
 
@@ -124,8 +124,8 @@ model TeacherStudent {
 
 model Assignment {
   id             Int       @id @default(autoincrement())
-  title          String
-  description    String?
+  title          String    @db.VarChar(500)
+  description    String?   @db.Text
   course         String?
   assignmentType String?   @map("assignment_type")
   /// When the assignment opens. Null means "open from the moment it was
@@ -139,12 +139,12 @@ model Assignment {
   subjectId      Int?      @map("subject_id")
   createdAt      DateTime  @default(now()) @map("created_at")
 
-  teacher       User?          @relation(fields: [teacherId], references: [id])
-  group         Group?         @relation(fields: [groupId], references: [id])
-  subject       Subject?       @relation(fields: [subjectId], references: [id])
-  submissions   Submission[]
-  notifications Notification[]
-  criteria      Criterion[]
+  teacher            User?               @relation(fields: [teacherId], references: [id])
+  group              Group?              @relation(fields: [groupId], references: [id])
+  subject            Subject?            @relation(fields: [subjectId], references: [id])
+  submissions        Submission[]
+  notifications      Notification[]
+  criteria           Criterion[]
   deadlineExtensions DeadlineExtension[]
 
   @@map("assignment")
@@ -173,12 +173,12 @@ model Criterion {
   id           Int      @id @default(autoincrement())
   assignmentId Int      @map("assignment_id")
   name         String
-  description  String? // what a good answer must contain
+  description  String?  @db.Text // what a good answer must contain
   weight       Float    @default(1) // relative weight; normalised at grading time
   maxScore     Int      @default(100) @map("max_score")
   /// JSON map of score band -> what that band looks like, e.g.
   /// {"0":"missing","50":"present but shallow","100":"complete and justified"}
-  levels       String?
+  levels       String?  @db.Text
   position     Int      @default(0)
   createdAt    DateTime @default(now()) @map("created_at")
 
@@ -197,7 +197,7 @@ model CriterionTemplate {
   id          Int      @id @default(autoincrement())
   teacherId   Int      @map("teacher_id")
   name        String
-  description String?
+  description String?  @db.Text
   weight      Float    @default(10)
   maxScore    Int      @default(100) @map("max_score")
   position    Int      @default(0)
@@ -213,7 +213,7 @@ model UserProfile {
   id          Int      @id @default(autoincrement())
   userId      Int      @unique @map("user_id")
   displayName String?  @map("display_name")
-  avatarUrl   String?  @map("avatar_url")
+  avatarUrl   String?  @map("avatar_url") @db.VarChar(500)
   updatedAt   DateTime @default(now()) @updatedAt @map("updated_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -230,11 +230,11 @@ model Submission {
   /// a grade but never lower it. Rows written before attempts existed are 1.
   attempt           Int      @default(1)
   submittedAt       DateTime @default(now()) @map("submitted_at")
-  filePath          String?  @map("file_path")
-  flowchartPath     String?  @map("flowchart_path")
-  presentationPath  String?  @map("presentation_path")
+  filePath          String?  @map("file_path") @db.VarChar(500)
+  flowchartPath     String?  @map("flowchart_path") @db.VarChar(500)
+  presentationPath  String?  @map("presentation_path") @db.VarChar(500)
   overallScore      Float?   @map("overall_score")
-  aiFeedbackSummary String?  @map("ai_feedback_summary")
+  aiFeedbackSummary String?  @map("ai_feedback_summary") @db.Text
 
   /// Which engine produced the score ("gemini:<model>", "openrouter", "mock").
   /// Kept so a grade can always be traced back to how it was produced.
@@ -242,29 +242,29 @@ model Submission {
   /// Set when a teacher overrides the AI score. `overallScore` keeps the AI
   /// value; the teacher's number wins wherever a final grade is displayed.
   teacherScore   Float?    @map("teacher_score")
-  teacherComment String?   @map("teacher_comment")
+  teacherComment String?   @map("teacher_comment") @db.Text
   reviewedAt     DateTime? @map("reviewed_at")
   reviewedById   Int?      @map("reviewed_by_id")
 
   // ---- Originality check ---------------------------------------------------
   /// SHA-256 of the normalised comparison text. Two submissions with the same
   /// hash are literally the same work — the cheapest possible copy detection.
-  contentHash    String?   @map("content_hash")
+  contentHash         String?   @map("content_hash")
   /// Space-free run of 8-hex-char word-shingle hashes. This is what every later
   /// submission is compared against, so a work stays in the corpus for good
   /// without keeping its full text around a second time.
-  fingerprint    String?
+  fingerprint         String?   @db.LongText
   /// How many words the fingerprint was built from — a submission too short to
   /// judge is recorded as checked rather than silently treated as clean.
-  fingerprintWords Int?    @map("fingerprint_words")
+  fingerprintWords    Int?      @map("fingerprint_words")
   /// Highest similarity found against any earlier submission, 0–100.
-  plagiarismScore  Float?  @map("plagiarism_score")
+  plagiarismScore     Float?    @map("plagiarism_score")
   /// 'clean' | 'low' | 'moderate' | 'high' | 'duplicate' | 'too_short' | 'skipped'
-  plagiarismStatus String? @map("plagiarism_status")
+  plagiarismStatus    String?   @map("plagiarism_status")
   /// Points removed from the AI grade because of the similarity found.
-  plagiarismPenalty Float? @map("plagiarism_penalty")
+  plagiarismPenalty   Float?    @map("plagiarism_penalty")
   /// The warning the student reads, already in their language.
-  plagiarismReport String? @map("plagiarism_report")
+  plagiarismReport    String?   @map("plagiarism_report") @db.Text
   plagiarismCheckedAt DateTime? @map("plagiarism_checked_at")
 
   student       User?          @relation(fields: [studentId], references: [id], onDelete: Cascade)
@@ -276,7 +276,7 @@ model Submission {
   assignment    Assignment?    @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
   sectionScores SectionScore[]
 
-  plagiarismMatches  PlagiarismMatch[] @relation("PlagiarismSuspect")
+  plagiarismMatches   PlagiarismMatch[] @relation("PlagiarismSuspect")
   plagiarismMatchedBy PlagiarismMatch[] @relation("PlagiarismSource")
 
   // The attempt limit is checked by counting existing rows, which two requests
@@ -307,9 +307,9 @@ model PlagiarismMatch {
   /// 'copy' | 'paraphrase' | 'common_material' | 'independent' | 'lexical'
   verdict             String?
   /// Why the AI ruled the way it did, in the student's language.
-  explanation         String?
+  explanation         String?  @db.Text
   /// JSON array of {suspect, source} passage pairs that matched.
-  snippets            String?
+  snippets            String?  @db.LongText
   createdAt           DateTime @default(now()) @map("created_at")
 
   submission        Submission  @relation("PlagiarismSuspect", fields: [submissionId], references: [id], onDelete: Cascade)
@@ -328,11 +328,11 @@ model SectionScore {
   score        Float?
   maxScore     Int?    @map("max_score")
   weight       Float? // weight snapshot, so an edited rubric can't rewrite history
-  content      String?
-  feedback     String?
+  content      String? @db.LongText
+  feedback     String? @db.Text
   /// Verbatim quote from the student's work backing this score. Required of the
   /// model so a teacher can verify the grade instead of trusting it.
-  evidence     String?
+  evidence     String? @db.Text
 
   submission Submission? @relation(fields: [submissionId], references: [id], onDelete: Cascade)
   criterion  Criterion?  @relation(fields: [criterionId], references: [id], onDelete: SetNull)
@@ -343,7 +343,7 @@ model SectionScore {
 model Setting {
   id       Int     @id @default(autoincrement())
   key      String  @unique
-  value    String?
+  value    String? @db.Text
   category String?
 
   @@map("setting")
@@ -386,8 +386,8 @@ model Notification {
   id           Int      @id @default(autoincrement())
   studentId    Int      @map("student_id")
   assignmentId Int?     @map("assignment_id")
-  title        String
-  message      String?
+  title        String   @db.VarChar(500)
+  message      String?  @db.Text
   type         String?  @default("assignment")
   isRead       Boolean  @default(false) @map("is_read")
   createdAt    DateTime @default(now()) @map("created_at")
@@ -400,8 +400,8 @@ model Notification {
 
 model News {
   id          Int      @id @default(autoincrement())
-  title       String
-  content     String
+  title       String   @db.VarChar(500)
+  content     String   @db.Text
   authorId    Int?     @map("author_id")
   isPublished Boolean  @default(true) @map("is_published")
   createdAt   DateTime @default(now()) @map("created_at")
@@ -416,7 +416,7 @@ model ActivityLog {
   id        Int      @id @default(autoincrement())
   userId    Int?     @map("user_id")
   action    String
-  details   String?
+  details   String?  @db.Text
   ipAddress String?  @map("ip_address")
   createdAt DateTime @default(now()) @map("created_at")
 
@@ -427,10 +427,10 @@ model ActivityLog {
 
 model Book {
   id         Int      @id @default(autoincrement())
-  title      String
+  title      String   @db.VarChar(500)
   author     String?
-  filePath   String   @map("file_path")
-  coverImage String?  @map("cover_image")
+  filePath   String   @map("file_path") @db.VarChar(500)
+  coverImage String?  @map("cover_image") @db.VarChar(500)
   subjectId  Int?     @map("subject_id")
   createdAt  DateTime @default(now()) @map("created_at")
 
