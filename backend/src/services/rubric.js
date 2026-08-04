@@ -8,6 +8,7 @@ import prisma from '../lib/prisma.js';
 import { SECTION_WEIGHTS } from './fuzzyLogic.js';
 import { ORDERED_SECTIONS } from './aiService.js';
 import { sectionTitle, t, DEFAULT_LANG } from '../i18n/index.js';
+import { pickI18n } from './translator.js';
 
 /** The 9 standard sections expressed as rubric rows. */
 export function standardRubric(lang = DEFAULT_LANG) {
@@ -37,12 +38,15 @@ export async function resolveRubric(assignmentId, lang = DEFAULT_LANG) {
     : [];
 
   const custom = criteria.length > 0;
+  // `key` stays the name as the teacher typed it — it is what the submission
+  // form posts under and what SectionScore.sectionName stores, so it must not
+  // move when the viewer switches language. Only what is shown is localised.
   const rows = custom
     ? criteria.map((c, i) => ({
         id: c.id,
         key: c.name,
-        name: c.name,
-        description: c.description || '',
+        name: pickI18n(c.nameI18n, lang, c.name),
+        description: pickI18n(c.descriptionI18n, lang, c.description || ''),
         weight: c.weight > 0 ? c.weight : 1,
         maxScore: c.maxScore || 100,
         levels: parseLevels(c.levels),

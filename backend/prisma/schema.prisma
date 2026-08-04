@@ -172,8 +172,14 @@ model DeadlineExtension {
 model Criterion {
   id           Int      @id @default(autoincrement())
   assignmentId Int      @map("assignment_id")
+  /// The canonical (as-typed) name. Never localised: it is the rubric key the
+  /// submission form, the grader and SectionScore.sectionName all agree on.
   name         String
   description  String?  @db.Text // what a good answer must contain
+  /// JSON `{"uz":"…","ru":"…","en":"…"}` used for display only, so a criterion
+  /// reads in the viewer's language. Missing => fall back to `name`.
+  nameI18n        String? @map("name_i18n") @db.Text
+  descriptionI18n String? @map("description_i18n") @db.Text
   weight       Float    @default(1) // relative weight; normalised at grading time
   maxScore     Int      @default(100) @map("max_score")
   /// JSON map of score band -> what that band looks like, e.g.
@@ -196,8 +202,13 @@ model Criterion {
 model CriterionTemplate {
   id          Int      @id @default(autoincrement())
   teacherId   Int      @map("teacher_id")
+  /// As typed by the teacher; the localised variants live in `nameI18n`.
   name        String
   description String?  @db.Text
+  /// JSON `{"uz":"…","ru":"…","en":"…"}` — filled from the standard rubric when
+  /// the row comes from it, otherwise translated once on save.
+  nameI18n        String? @map("name_i18n") @db.Text
+  descriptionI18n String? @map("description_i18n") @db.Text
   weight      Float    @default(10)
   maxScore    Int      @default(100) @map("max_score")
   position    Int      @default(0)

@@ -90,9 +90,19 @@ export default function TeacherAssignments() {
       // Copy the criteria the teacher ticked from their library onto the new
       // assignment(s). Nothing selected → save none, so the server grades against
       // its built-in standard 9 (which stay multilingual).
+      // The library rows already carry their {uz,ru,en} text, so copying it
+      // across means the assignment's rubric reads in the student's language
+      // without the server having to translate it a second time.
       const named = library
         .filter((c) => selectedIds.includes(c.id))
-        .map((c) => ({ name: c.name, description: c.description, weight: c.weight, max_score: c.max_score }));
+        .map((c) => ({
+          name: c.name,
+          description: c.description,
+          name_i18n: c.name_i18n,
+          description_i18n: c.description_i18n,
+          weight: c.weight,
+          max_score: c.max_score,
+        }));
       // The same rubric is copied onto each group's assignment.
       const ids = created.assignment_ids?.length ? created.assignment_ids : [created.assignment_id];
       if (named.length) await Promise.all(ids.map((id) => assignmentsApi.saveCriteria(id, named)));

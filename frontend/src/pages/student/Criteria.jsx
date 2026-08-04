@@ -7,7 +7,8 @@ import { subjectsApi, assignmentsApi } from '../../api';
 const { Title, Paragraph, Text } = Typography;
 
 export default function Criteria() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const lang = i18n.language; // criteria come back translated, so a switch re-fetches
   const [subjects, setSubjects] = useState([]);
   const [ratings, setRatings] = useState([]);
   const [active, setActive] = useState(null);
@@ -41,7 +42,7 @@ export default function Criteria() {
       .then(setRubric)
       .catch(() => setRubric(null))
       .finally(() => setLoadingRubric(false));
-  }, [activeAssignment]);
+  }, [activeAssignment, lang]);
 
   const rating = ratings.find((r) => r.subject_id === active?.id);
 

@@ -358,6 +358,7 @@
     "criteriaAdd": "Add a criterion",
     "criteriaName": "Criterion name",
     "criteriaDescPlaceholder": "What must the work contain to score full marks? The more specific you are, the more accurate the grade.",
+    "criteriaTranslateHint": "Write the criterion in whichever language suits you — it is translated into the others automatically. You can correct a translation by hand on its tab.",
     "criteriaTotalWeight": "Total weight: {{total}}%",
     "criteriaWeightNote": "The weights do not have to add up to 100 — they are scaled automatically.",
     "criteriaLibraryTitle": "Grading criteria",

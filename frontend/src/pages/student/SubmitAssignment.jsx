@@ -32,7 +32,8 @@ const STANDARD_SECTIONS = [
 ];
 
 export default function SubmitAssignment() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const lang = i18n.language;
   const { assignmentId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -67,7 +68,10 @@ export default function SubmitAssignment() {
       .then((a) => { if (alive) setAssignment(a); })
       .catch(() => {});
     return () => { alive = false; };
-  }, [assignmentId]);
+    // `lang`: the rubric arrives in the caller's language, so switching it must
+    // re-read the questions. Answers are keyed by the (language-independent)
+    // criterion key, so nothing the student has written is lost.
+  }, [assignmentId, lang]);
 
   const attemptNo = (assignment?.attempts_used ?? 0) + 1;
   const maxAttempts = assignment?.max_attempts ?? 1;

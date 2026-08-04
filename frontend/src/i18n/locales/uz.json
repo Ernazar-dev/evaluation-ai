@@ -358,6 +358,7 @@
     "criteriaAdd": "Mezon qo'shish",
     "criteriaName": "Mezon nomi",
     "criteriaDescPlaceholder": "To'liq ball olish uchun ishda nima bo'lishi kerak? Qanchalik aniq yozsangiz, baho shunchalik to'g'ri bo'ladi.",
+    "criteriaTranslateHint": "Mezonni o'zingizga qulay tilda yozing — qolgan tillarga avtomatik tarjima qilinadi. Xohlasangiz, tarjimani tegishli tab'da qo'lda tuzatishingiz mumkin.",
     "criteriaTotalWeight": "Jami vazn: {{total}}%",
     "criteriaWeightNote": "Vaznlar yig'indisi 100 bo'lmasa ham bo'ladi — ular avtomatik nisbatlanadi.",
     "criteriaLibraryTitle": "Baholash mezonlari",

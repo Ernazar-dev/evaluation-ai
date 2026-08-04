@@ -12,6 +12,7 @@
     "prisma:migrate": "prisma migrate deploy",
     "seed": "node src/seed.js",
     "reset": "node src/reset.js",
+    "translate:criteria": "node src/translateCriteria.js",
     "postinstall": "prisma generate"
   },
   "prisma": {

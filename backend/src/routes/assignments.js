@@ -11,6 +11,7 @@ import { extractFileContent } from '../services/fileParser.js';
 import { processSubmission, recalcRating, recheckPlagiarism } from '../services/gradingService.js';
 import { getOrCreateSubject } from '../services/subjectService.js';
 import { resolveRubric, parseLevels } from '../services/rubric.js';
+import { buildCriterionI18n, pickI18n, fullI18n } from '../services/translator.js';
 import { generateSubmissionPdf } from '../services/pdfService.js';
 import { sectionTitle, t, DEFAULT_LANG } from '../i18n/index.js';
 import { MAX_ATTEMPTS, attemptsLeft, bestAttempts, finalScoreOf } from '../utils/attempts.js';
@@ -482,10 +483,12 @@ async function assignmentForEdit(req, res) {
   return a;
 }
 
-const criterionOut = (c) => ({
+const criterionOut = (c, lang) => ({
   id: c.id,
-  name: c.name,
-  description: c.description,
+  name: pickI18n(c.nameI18n, lang, c.name),
+  description: pickI18n(c.descriptionI18n, lang, c.description || ''),
+  name_i18n: fullI18n(c.nameI18n, c.name),
+  description_i18n: fullI18n(c.descriptionI18n, c.description || ''),
   weight: c.weight,
   max_score: c.maxScore,
   levels: parseLevels(c.levels),
@@ -514,7 +517,39 @@ router.get('/:id(\\d+)/criteria', async (req, res) => {
       position: r.position ?? i,
     })),
   });
+  if (custom) backfillCriteria(id, req.lang);
 });
+
+/**
+ * Rubrics saved before criteria became multilingual have no `{uz,ru,en}` map,
+ * so they read in whatever language they were written in. Fill them in behind
+ * the response: the reader still gets an answer immediately, and by their next
+ * visit the rubric follows the language switcher like everything else.
+ */
+const backfilled = new Set();
+function backfillCriteria(assignmentId, lang) {
+  if (backfilled.has(assignmentId)) return;
+  backfilled.add(assignmentId);
+  (async () => {
+    const pending = await prisma.criterion.findMany({
+      where: { assignmentId, nameI18n: null },
+    });
+    for (const c of pending) {
+      try {
+        const i18n = await buildCriterionI18n(
+          { name: c.name, description: c.description || '' },
+          lang
+        );
+        await prisma.criterion.update({ where: { id: c.id }, data: i18n });
+      } catch (e) {
+        console.warn('criterion backfill failed:', c.id, e.message);
+      }
+    }
+  })().catch((e) => {
+    backfilled.delete(assignmentId); // let a later request try again
+    console.warn('criterion backfill failed:', assignmentId, e.message);
+  });
+}
 
 // PUT /assignments/:id/criteria — replace the rubric (teacher/admin)
 router.put('/:id(\\d+)/criteria', async (req, res) => {
@@ -522,10 +557,12 @@ router.put('/:id(\\d+)/criteria', async (req, res) => {
   if (!assignment) return;
 
   const incoming = Array.isArray(req.body?.criteria) ? req.body.criteria : [];
-  const rows = incoming
+  const base = incoming
     .map((c, i) => ({
       name: String(c.name || '').trim(),
       description: String(c.description || '').trim() || null,
+      nameI18n: c.name_i18n,
+      descriptionI18n: c.description_i18n,
       weight: Number(c.weight) > 0 ? Number(c.weight) : 1,
       maxScore: Number.isFinite(Number(c.max_score)) && Number(c.max_score) > 0 ? Math.round(Number(c.max_score)) : 100,
       levels: c.levels ? JSON.stringify(c.levels) : null,
@@ -533,8 +570,24 @@ router.put('/:id(\\d+)/criteria', async (req, res) => {
     }))
     .filter((c) => c.name);
 
-  if (incoming.length && !rows.length)
+  if (incoming.length && !base.length)
     return res.status(400).json({ message: req.t('criteria.nameRequired') });
+
+  // Criteria picked from the teacher's library arrive already translated, so
+  // this normally just re-serialises what was sent; text typed straight into
+  // the rubric is translated here instead.
+  const rows = await Promise.all(
+    base.map(async (c) => {
+      const { nameI18n, descriptionI18n, ...rest } = c;
+      return {
+        ...rest,
+        ...(await buildCriterionI18n(
+          { name: c.name, description: c.description || '', nameI18n, descriptionI18n },
+          req.lang
+        )),
+      };
+    })
+  );
 
   // Replace wholesale so the rubric always matches exactly what was sent.
   await prisma.$transaction([
@@ -552,7 +605,10 @@ router.put('/:id(\\d+)/criteria', async (req, res) => {
     title: assignment.title,
     count: saved.length,
   });
-  res.json({ message: req.t('criteria.saved'), criteria: saved.map(criterionOut) });
+  res.json({
+    message: req.t('criteria.saved'),
+    criteria: saved.map((c) => criterionOut(c, req.lang)),
+  });
 });
 
 // POST /assignments/:id/submit  — student submission with files + 9 section fields
