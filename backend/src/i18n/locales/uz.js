@@ -82,6 +82,8 @@ export default {
     notStarted: 'Topshiriq hali boshlanmagan. Belgilangan sanadan keyin topshirasiz.',
     titleRequired: 'Topshiriq nomi kiritilishi shart',
     groupRequired: 'Kamida bitta guruh tanlang',
+    invalidStudent: "Tanlangan guruhdan bitta o‘quvchini tanlang",
+    individualGroupLocked: "Individual topshiriqning guruhini o‘zgartirib bo‘lmaydi",
     created: 'Topshiriq yaratildi',
     updated: 'Topshiriq yangilandi',
     deleted: 'Topshiriq o\'chirildi',

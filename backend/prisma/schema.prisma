@@ -38,6 +38,7 @@ model User {
   news                News[]
   managedGroups       Group[]             @relation("GroupTeacher")
   assignments         Assignment[]
+  individualAssignments Assignment[] @relation("AssignmentStudent")
   criterionTemplates  CriterionTemplate[]
   teacherStudents     TeacherStudent[]    @relation("TS_Teacher")
   studentTeachers     TeacherStudent[]    @relation("TS_Student")
@@ -136,10 +137,12 @@ model Assignment {
   deadline       DateTime?
   teacherId      Int?      @map("teacher_id")
   groupId        Int?      @map("group_id")
+  studentId      Int?      @map("student_id")
   subjectId      Int?      @map("subject_id")
   createdAt      DateTime  @default(now()) @map("created_at")
 
   teacher            User?               @relation(fields: [teacherId], references: [id])
+  student            User?               @relation("AssignmentStudent", fields: [studentId], references: [id], onDelete: Cascade)
   group              Group?              @relation(fields: [groupId], references: [id])
   subject            Subject?            @relation(fields: [subjectId], references: [id])
   submissions        Submission[]

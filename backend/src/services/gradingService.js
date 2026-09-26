@@ -1,3 +1,4 @@
+import { recipientFilter } from '../utils/assignmentAccess.js';
 // Grades a submission in the background and recalculates the student's rating.
 // Executed fire-and-forget after a submission so the HTTP request returns fast.
 //
@@ -561,7 +562,7 @@ export async function recalcRating(studentId, courseName) {
   if (!subject) return null;
 
   const student = await prisma.user.findUnique({ where: { id: studentId } });
-  const where = { course: courseName };
+  const where = { course: courseName, ...recipientFilter(studentId) };
   if (student?.groupId) where.groupId = student.groupId;
   const assignments = await prisma.assignment.findMany({ where });
   const assignmentIds = assignments.map((a) => a.id);

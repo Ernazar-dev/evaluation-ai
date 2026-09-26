@@ -1,3 +1,4 @@
+import { recipientFilter, isAssignmentRecipient } from '../utils/assignmentAccess.js';
 import { Router } from '../lib/asyncRouter.js';
 import multer from 'multer';
 import fs from 'fs';
@@ -59,6 +60,9 @@ router.use(authRequired);
  * submitted" roster and the notify list can never drift apart.
  */
 async function assignmentAudience(assignment) {
+  if (assignment.studentId != null) {
+    return prisma.user.findMany({ where: { id: assignment.studentId, role: 'student' } });
+  }
   const ids = new Set();
   if (assignment.groupId) {
     const members = await prisma.user.findMany({
@@ -109,12 +113,12 @@ router.get('/', async (req, res) => {
   let assignments;
   if (u.role === 'student') {
     if (u.groupId) {
-      assignments = await prisma.assignment.findMany({ where: { groupId: u.groupId } });
+      assignments = await prisma.assignment.findMany({ where: { groupId: u.groupId, ...recipientFilter(u.id) } });
     } else {
       const ts = await prisma.teacherStudent.findMany({ where: { studentId: u.id } });
       const teacherIds = ts.map((rel) => rel.teacherId);
       assignments = await prisma.assignment.findMany({
-        where: { teacherId: { in: teacherIds }, groupId: null },
+        where: { teacherId: { in: teacherIds }, groupId: null, ...recipientFilter(u.id) },
       });
     }
   } else if (u.role === 'teacher') {
@@ -158,6 +162,11 @@ router.get('/', async (req, res) => {
   const teacherById = new Map(teachers.map((u) => [u.id, u]));
   const groupById = new Map(groups.map((g) => [g.id, g]));
 
+  const recipients = await prisma.user.findMany({
+    where: { id: { in: [...new Set(assignments.map((a) => a.studentId).filter(Boolean))] } },
+    select: { id: true, fullName: true, username: true },
+  });
+  const recipientById = new Map(recipients.map((student) => [student.id, student]));
   const now = new Date();
   const out = [];
   for (const a of assignments) {
@@ -175,6 +184,8 @@ router.get('/', async (req, res) => {
       deadline: a.deadline ? a.deadline.toISOString() : null,
       teacher_id: a.teacherId,
       teacher_name: teacher ? teacher.username : 'Unknown',
+      student_id: a.studentId,
+      student_name: recipientById.get(a.studentId)?.fullName || recipientById.get(a.studentId)?.username || null,
       group_id: a.groupId,
       group_name: group ? group.name : null,
       created_at: a.createdAt ? a.createdAt.toISOString() : null,
@@ -232,6 +243,8 @@ router.get('/my_submissions', async (req, res) => {
 router.get('/:id(\\d+)', async (req, res) => {
   const a = await prisma.assignment.findUnique({ where: { id: Number(req.params.id) } });
   if (!a) return res.status(404).json({ message: req.t('common.notFound') });
+  if (req.user.role === 'student' && !isAssignmentRecipient(a, req.user.id))
+    return res.status(403).json({ message: req.t('common.unauthorized') });
 
   // The submit wizard opens from here, so it must be able to tell the student
   // which try this is before they start filling it in.
@@ -312,6 +325,17 @@ router.post('/', async (req, res) => {
     if (!groupIds.length) return res.status(400).json({ message: req.t('assignment.groupRequired') });
   }
 
+  const studentId = data.student_id == null ? null : Number(data.student_id);
+  if (studentId !== null) {
+    if (!Number.isInteger(studentId) || studentId <= 0 || groupIds.length !== 1)
+      return res.status(400).json({ message: req.t('assignment.invalidStudent') });
+    const student = await prisma.user.findFirst({
+      where: { id: studentId, groupId: groupIds[0], role: 'student' },
+      select: { id: true },
+    });
+    if (!student) return res.status(400).json({ message: req.t('assignment.invalidStudent') });
+  }
+
   // Resolve the course name to a real Subject row so ratings, criteria and the
   // subject pages all hang off the same record instead of matching on a string.
   const subject = data.course ? await getOrCreateSubject(String(data.course).trim()) : null;
@@ -332,6 +356,7 @@ router.post('/', async (req, res) => {
         deadline,
         teacherId: req.user.id,
         groupId: gid,
+        studentId,
         subjectId: subject ? subject.id : null,
       },
     });
@@ -409,6 +434,8 @@ router.put('/:id(\\d+)', async (req, res) => {
       if (!group || (req.user.role === 'teacher' && group.teacherId !== req.user.id))
         return res.status(400).json({ message: req.t('assignment.groupRequired') });
     }
+    if (a.studentId != null && gid !== a.groupId)
+      return res.status(400).json({ message: req.t('assignment.individualGroupLocked') });
     patch.groupId = gid;
   }
 
@@ -502,6 +529,8 @@ router.get('/:id(\\d+)/criteria', async (req, res) => {
   const id = Number(req.params.id);
   const assignment = await prisma.assignment.findUnique({ where: { id } });
   if (!assignment) return res.status(404).json({ message: req.t('common.notFound') });
+  if (req.user.role === 'student' && !isAssignmentRecipient(assignment, req.user.id))
+    return res.status(403).json({ message: req.t('common.unauthorized') });
 
   const { rows, custom } = await resolveRubric(id, req.lang);
   res.json({
@@ -633,6 +662,8 @@ router.post(
     const id = Number(req.params.id);
     const assignment = await prisma.assignment.findUnique({ where: { id } });
     if (!assignment) return reject(404, req.t('common.notFound'));
+    if (!isAssignmentRecipient(assignment, req.user.id))
+      return reject(403, req.t('common.unauthorized'));
 
     // Before the window opens the door isn't open yet. A deadline extension
     // cannot help here — that moves the closing end, not the opening one.

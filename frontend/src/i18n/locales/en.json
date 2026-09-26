@@ -290,6 +290,10 @@
     }
   },
   "teacher": {
+    "recipient": "Assigned to",
+    "wholeGroup": "Whole group",
+    "individualHint": "For an individual assignment, select one group and a student. Leave the student empty to assign to the whole group.",
+    "studentsLoadError": "Could not load students. Select the group again.",
     "cabinet": "Teacher's workspace",
     "myAssignments": "My assignments",
     "myGroups": "My groups",

@@ -82,6 +82,8 @@ export default {
     notStarted: 'This assignment has not opened yet. You can submit after the start date.',
     titleRequired: 'An assignment title is required',
     groupRequired: 'Select at least one group',
+    invalidStudent: 'Select one student from the selected group',
+    individualGroupLocked: 'The group of an individual assignment cannot be changed',
     created: 'Assignment created',
     updated: 'Assignment updated',
     deleted: 'Assignment deleted',

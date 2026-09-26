@@ -1,3 +1,4 @@
+import { recipientFilter } from '../utils/assignmentAccess.js';
 import { Router } from '../lib/asyncRouter.js';
 import prisma from '../lib/prisma.js';
 import { authRequired } from '../middleware/auth.js';
@@ -14,7 +15,7 @@ router.get('/', async (req, res) => {
   const u = req.user;
   let assignments;
   if (u.role === 'student') {
-    assignments = u.groupId ? await prisma.assignment.findMany({ where: { groupId: u.groupId } }) : [];
+    assignments = u.groupId ? await prisma.assignment.findMany({ where: { groupId: u.groupId, ...recipientFilter(u.id) } }) : [];
   } else {
     assignments = await prisma.assignment.findMany();
   }
@@ -34,7 +35,7 @@ router.get('/', async (req, res) => {
     const subject = await getOrCreateSubject(name);
     const count =
       u.role === 'student'
-        ? await prisma.assignment.count({ where: { course: name, groupId: u.groupId } })
+        ? await prisma.assignment.count({ where: { course: name, groupId: u.groupId, ...recipientFilter(u.id) } })
         : await prisma.assignment.count({ where: { course: name } });
     list.push({
       id: subject.id,
@@ -56,7 +57,7 @@ router.get('/:subjectId(\\d+)/assignments', async (req, res) => {
 
   const assignments =
     u.role === 'student'
-      ? await prisma.assignment.findMany({ where: { course: subject.name, groupId: u.groupId } })
+      ? await prisma.assignment.findMany({ where: { course: subject.name, groupId: u.groupId, ...recipientFilter(u.id) } })
       : await prisma.assignment.findMany({ where: { course: subject.name } });
 
   // Same attempt state the main assignment list carries: a student browsing by
@@ -114,7 +115,7 @@ router.get('/academic-ratings', async (req, res) => {
   if (req.user.role !== 'student')
     return res.status(403).json({ message: req.t('subject.onlyStudentsRatings') });
 
-  const assignments = await prisma.assignment.findMany();
+  const assignments = await prisma.assignment.findMany({ where: recipientFilter(req.user.id) });
   const courseNames = [...new Set(assignments.map((a) => a.course).filter(Boolean))];
 
   const list = [];
@@ -161,7 +162,7 @@ router.get('/academic-report/download', async (req, res) => {
   if (req.user.role !== 'student')
     return res.status(403).json({ message: req.t('subject.onlyStudentsReport') });
 
-  const allAssignments = await prisma.assignment.findMany();
+  const allAssignments = await prisma.assignment.findMany({ where: recipientFilter(req.user.id) });
   const courseNames = [...new Set(allAssignments.map((a) => a.course).filter(Boolean))].sort();
   const allSubs = await prisma.submission.findMany({ where: { studentId: req.user.id } });
 

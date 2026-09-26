@@ -290,6 +290,10 @@
     }
   },
   "teacher": {
+    "recipient": "Kimga beriladi",
+    "wholeGroup": "Butun guruhga",
+    "individualHint": "Alohida topshiriq uchun bitta guruh va undan o‘quvchini tanlang. O‘quvchi tanlanmasa, topshiriq butun guruhga beriladi.",
+    "studentsLoadError": "O‘quvchilar ro‘yxatini yuklab bo‘lmadi. Guruhni qayta tanlang.",
     "cabinet": "O'qituvchi kabineti",
     "myAssignments": "Mening topshiriqlarim",
     "myGroups": "Mening guruhlarim",

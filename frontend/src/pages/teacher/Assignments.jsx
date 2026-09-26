@@ -27,6 +27,23 @@ export default function TeacherAssignments() {
   const [step, setStep] = useState(0);
   const [draft, setDraft] = useState({});
   const [form] = Form.useForm();
+  const selectedGroups = Form.useWatch('group_ids', form);
+  const selectedGroupId = selectedGroups?.length === 1 ? selectedGroups[0] : null;
+  const [students, setStudents] = useState([]);
+  const [studentsLoading, setStudentsLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setStudents([]);
+    setStudentsLoading(false);
+    if (!open || !selectedGroupId) return;
+    setStudentsLoading(true);
+    teacherApi.groupStudents(selectedGroupId)
+      .then((result) => { if (!cancelled) setStudents(result.students); })
+      .catch(() => { if (!cancelled) message.error(t('teacher.studentsLoadError')); })
+      .finally(() => { if (!cancelled) setStudentsLoading(false); });
+    return () => { cancelled = true; };
+  }, [open, selectedGroupId, t]);
 
   // Editing an existing assignment's core fields (title, deadline, …) is a much
   // lighter flow than the create wizard, so it gets its own small modal + form.
@@ -61,7 +78,7 @@ export default function TeacherAssignments() {
 
   // Each phase validates only its own fields before advancing. The rubric phase
   // has no form fields of its own, so it just advances.
-  const PHASE_FIELDS = { 0: ['course', 'group_ids', 'title'], 1: ['type', 'window'], 2: [] };
+  const PHASE_FIELDS = { 0: ['course', 'group_ids', 'student_id', 'title'], 1: ['type', 'window'], 2: [] };
   const nextStep = async () => {
     try {
       const values = await form.validateFields(PHASE_FIELDS[step] || []);
@@ -81,6 +98,7 @@ export default function TeacherAssignments() {
         type: values.type,
         // One create call fans the assignment out to every chosen group.
         group_ids: values.group_ids,
+        student_id: values.student_id ?? null,
         // The picker gives midnight on both ends; the window has to cover both
         // named days in full — open from the first minute of the opening day,
         // closed at the last minute of the closing one.
@@ -167,6 +185,7 @@ export default function TeacherAssignments() {
   const columns = [
     { title: t('common.name'), dataIndex: 'title' },
     { title: t('common.subject'), dataIndex: 'course' },
+    { title: t('teacher.recipient'), dataIndex: 'student_name', render: (name) => name || t('teacher.wholeGroup') },
     {
       title: t('teacher.deadline'),
       dataIndex: 'deadline',
@@ -313,7 +332,22 @@ export default function TeacherAssignments() {
                 mode="multiple"
                 allowClear
                 placeholder={t('teacher.pickGroups')}
+                onChange={() => form.setFieldValue('student_id', undefined)}
                 options={groups.map((g) => ({ value: g.id, label: g.name }))}
+              />
+            </Form.Item>
+            <Form.Item name="student_id" label={t('teacher.recipient')} extra={t('teacher.individualHint')}>
+              <Select
+                allowClear
+                showSearch
+                optionFilterProp="label"
+                disabled={!selectedGroupId || studentsLoading}
+                loading={studentsLoading}
+                placeholder={t('teacher.wholeGroup')}
+                options={students.map((student) => ({
+                  value: student.id,
+                  label: `${student.full_name || student.username} (${student.username})`,
+                }))}
               />
             </Form.Item>
             <Form.Item name="title" label={t('common.name')} rules={[{ required: true }]}>
@@ -429,6 +463,11 @@ export default function TeacherAssignments() {
                     .map((g) => g.name)
                     .join(', ') || '—'}
                 </Descriptions.Item>
+                <Descriptions.Item label={t('teacher.recipient')}>
+                  {students.find((student) => student.id === form.getFieldValue('student_id'))?.full_name
+                    || students.find((student) => student.id === form.getFieldValue('student_id'))?.username
+                    || t('teacher.wholeGroup')}
+                </Descriptions.Item>
                 <Descriptions.Item label={t('teacher.type')}>
                   {form.getFieldValue('type') === 'practical' ? t('teacher.practical') : t('teacher.theoretical')}
                 </Descriptions.Item>
@@ -479,6 +518,7 @@ export default function TeacherAssignments() {
           <Form.Item name="group_id" label={t('common.group')} rules={[{ required: true }]}>
             <Select
               placeholder={t('teacher.pickGroup')}
+              disabled={data.find((assignment) => assignment.id === editingId)?.student_id != null}
               options={groups.map((g) => ({ value: g.id, label: g.name }))}
             />
           </Form.Item>
