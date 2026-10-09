@@ -25,7 +25,7 @@ const config = {
   // than a text-extraction approximation. Falls back to OpenRouter, then to the
   // deterministic mock, so the platform still runs with no keys at all.
   geminiApiKey: process.env.GEMINI_API_KEY || '',
-  geminiModel: process.env.GEMINI_MODEL || 'gemini-3.5-flash',
+  geminiModel: process.env.GEMINI_MODEL || 'gemini-3.8-flash',
   // Tried in order when the primary model is unavailable or rate-limited.
   // `gemini-flash-latest` is an always-current alias that stays available even
   // when a pinned version is retired, so it makes a dependable last resort.
@@ -35,7 +35,7 @@ const config = {
   // others. Keep an older, less contended model at the end of the chain: it is
   // the one still answering when the newest is returning 429.
   geminiFallbackModels: (
-    process.env.GEMINI_FALLBACK_MODELS || 'gemini-flash-latest,gemini-3.5-flash,gemini-2.5-flash'
+    process.env.GEMINI_FALLBACK_MODELS || 'gemini-flash-latest,gemini-3.6-flash,gemini-3.5-flash'
   )
     .split(',')
     .map((s) => s.trim())

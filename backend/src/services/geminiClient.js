@@ -186,6 +186,7 @@ export async function generate({ system, input, schema, temperature = 0 }) {
   // that was out of quota, spending the retry on a guaranteed 429.
   const models = [...new Set([config.geminiModel, ...config.geminiFallbackModels])];
   let lastError;
+  const failures = [];
 
   for (const model of models) {
     const controller = new AbortController();
@@ -195,12 +196,16 @@ export async function generate({ system, input, schema, temperature = 0 }) {
       return { text, model };
     } catch (e) {
       lastError = e;
+      failures.push(`${model}: ${String(e.message).slice(0, 120)}`);
       // A non-retryable API error means the request itself is wrong — stop.
       if (e instanceof GeminiError && e.status && !e.retryable) break;
     } finally {
       clearTimeout(timer);
     }
   }
+  // The thrown error is the last model's alone, which hides why the earlier
+  // ones were skipped — log the whole chain so the first failure is visible.
+  if (failures.length > 1) console.error(`Gemini chain failed -> ${failures.join(' | ')}`);
   throw lastError || new GeminiError('All Gemini models failed');
 }
 

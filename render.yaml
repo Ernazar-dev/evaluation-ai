@@ -68,12 +68,12 @@ services:
       - key: GEMINI_API_KEY
         sync: false
       - key: GEMINI_MODEL
-        value: gemini-3.6-flash
+        value: gemini-3.8-flash
       # Quota is counted per model. Once the newest model returns 429 the chain
       # is the only thing keeping grading off the length-based mock, so it ends
       # on an older, less contended model that still answers.
       - key: GEMINI_FALLBACK_MODELS
-        value: gemini-flash-latest,gemini-3.5-flash,gemini-2.5-flash
+        value: gemini-flash-latest,gemini-3.6-flash,gemini-3.5-flash
       # Each sample is one API call, and GEMINI_VERIFY adds one more: at 3 and
       # "true" a single submission costs FOUR calls. That is the accuracy this
       # platform is built around, but on a free API key it exhausts the daily
