@@ -20,7 +20,9 @@ import { calculateFinalScore } from './fuzzyLogic.js';
 import { getOrCreateSubject } from './subjectService.js';
 import { resolveRubric, weightedTotal } from './rubric.js';
 import { gradeWithGemini } from './geminiGrader.js';
-import { isConfigured as geminiConfigured } from './geminiClient.js';
+import { isConfigured as geminiConfigured, coolingDown as geminiCoolingDown } from './geminiClient.js';
+import fs from 'fs';
+import config from '../config.js';
 import { getSubjectReference } from './knowledgeBase.js';
 import { extractFileContent } from './fileParser.js';
 import { analyzeSubmission, qualityNote } from './textQuality.js';
@@ -46,6 +48,7 @@ export async function processSubmission({
   flowchartPath,
   sectionsData,
   lang = DEFAULT_LANG,
+  tries = 0,
 }) {
   const fileText = file?.text || '';
   const fileExtracted = !!file?.extracted;
@@ -111,11 +114,30 @@ export async function processSubmission({
           engine: `gemini:${graded.model}`,
         };
       } catch (e) {
-        console.error('Gemini grading failed, falling back:', e.message);
+        // No fallback grade here. The length-based legacy scorer cannot tell a
+        // weak essay from a good one, and while Gemini was out of quota it
+        // handed passing marks to work that deserved none. The submission
+        // stays "processing" and the retry worker grades it once Gemini is back.
+        console.error(`Gemini grading failed for submission ${submission.id}, queued for retry:`, e.message);
+        await plagiarismPromise; // let the check finish its writes before we touch the row
+        await queueSubmission(submission.id, {
+          lang,
+          sectionsData,
+          fileText,
+          fileExtracted,
+          filePath: filePath || submission.filePath,
+          flowchartPath,
+          // Running out of quota is not the submission's fault and passes on its
+          // own; only other failures count towards giving up on it.
+          tries: e?.status === 429 ? tries : tries + 1,
+          error: String(e.message).slice(0, 200),
+        });
+        return;
       }
     }
 
     if (!result) {
+      // Reached only when no Gemini key is configured at all (local development).
       result = await legacyGrade({
         rows,
         custom,
@@ -230,7 +252,12 @@ export async function failStalledSubmissions({ graceMinutes = 15 } = {}) {
   const cutoff = new Date(Date.now() - graceMinutes * 60 * 1000);
   try {
     const { count } = await prisma.submission.updateMany({
-      where: { overallScore: null, submittedAt: { lt: cutoff } },
+      // Queued work is waiting for Gemini on purpose — the retry worker owns it.
+      where: {
+        overallScore: null,
+        submittedAt: { lt: cutoff },
+        OR: [{ gradedBy: null }, { gradedBy: { not: QUEUED } }],
+      },
       data: {
         overallScore: 0,
         aiFeedbackSummary: t(DEFAULT_LANG, 'ai.techError'),
@@ -245,6 +272,104 @@ export async function failStalledSubmissions({ graceMinutes = 15 } = {}) {
     console.error('Could not sweep stalled submissions:', e.message);
     return 0;
   }
+}
+
+// ---- Grading queue ---------------------------------------------------------
+//
+// A submission Gemini could not grade is parked as `gradedBy: 'queued'` with
+// `overallScore: null`, so every screen keeps showing it as "processing". What
+// the retry needs is stored in `aiFeedbackSummary` as JSON (the API hides it
+// while queued) — including the extracted file text, because on Render's free
+// plan the uploaded file itself may not survive a restart.
+
+const QUEUED = 'queued';
+const MAX_QUEUE_TRIES = 5;
+const MAX_QUEUED_TEXT = 120000;
+
+async function queueSubmission(submissionId, job) {
+  const payload = {
+    ...job,
+    fileText: (job.fileText || '').slice(0, MAX_QUEUED_TEXT),
+    queuedAt: new Date().toISOString(),
+  };
+  // Nothing from a half-finished grading may be left on the row.
+  await prisma.$transaction([
+    prisma.sectionScore.deleteMany({ where: { submissionId } }),
+    prisma.submission.update({
+      where: { id: submissionId },
+      data: { overallScore: null, gradedBy: QUEUED, aiFeedbackSummary: JSON.stringify(payload) },
+    }),
+  ]);
+}
+
+let retryRunning = false;
+
+/**
+ * Grades queued submissions, oldest first, a few per run. Skips the run while
+ * Gemini is paused for quota; stops early as soon as it goes back into a pause.
+ * A submission that keeps failing for other reasons, or has waited longer than
+ * GRADE_QUEUE_MAX_HOURS, is closed out with the technical-error message so the
+ * student can resubmit instead of watching a spinner forever.
+ */
+export async function retryQueuedSubmissions() {
+  if (retryRunning || !geminiConfigured() || geminiCoolingDown()) return 0;
+  retryRunning = true;
+  let graded = 0;
+  try {
+    const queued = await prisma.submission.findMany({
+      where: { gradedBy: QUEUED, overallScore: null },
+      orderBy: { submittedAt: 'asc' },
+      take: config.gradeRetryBatch,
+    });
+    const expiry = Date.now() - config.gradeQueueMaxHours * 3600 * 1000;
+
+    for (const s of queued) {
+      let job = {};
+      try {
+        job = JSON.parse(s.aiFeedbackSummary || '{}');
+      } catch {
+        /* unreadable payload — closed out below */
+      }
+      if (!job.sectionsData || (job.tries || 0) >= MAX_QUEUE_TRIES || s.submittedAt.getTime() < expiry) {
+        await prisma.submission.update({
+          where: { id: s.id },
+          data: { overallScore: 0, aiFeedbackSummary: t(job.lang || DEFAULT_LANG, 'ai.techError'), gradedBy: 'error' },
+        });
+        console.log(`Grading queue: gave up on submission ${s.id}`);
+        continue;
+      }
+
+      const exists = (p) => !!p && fs.existsSync(p);
+      await processSubmission({
+        submissionId: s.id,
+        assignmentId: s.assignmentId,
+        studentId: s.studentId,
+        file: { text: job.fileText || '', extracted: !!job.fileExtracted },
+        filePath: exists(job.filePath) ? job.filePath : null,
+        flowchartPath: exists(job.flowchartPath) ? job.flowchartPath : null,
+        sectionsData: job.sectionsData,
+        lang: job.lang || DEFAULT_LANG,
+        tries: job.tries || 0,
+      });
+
+      const after = await prisma.submission.findUnique({ where: { id: s.id }, select: { gradedBy: true } });
+      if (after?.gradedBy !== QUEUED) graded += 1;
+      if (geminiCoolingDown()) break;
+    }
+    if (queued.length) console.log(`Grading queue: ${graded}/${queued.length} graded this run.`);
+  } catch (e) {
+    console.error('Grading queue run failed:', e.message);
+  } finally {
+    retryRunning = false;
+  }
+  return graded;
+}
+
+/** Starts the background retry loop. Called once from server.js. */
+export function startGradingQueue() {
+  const every = config.gradeRetryMinutes * 60 * 1000;
+  setTimeout(() => retryQueuedSubmissions(), 30000).unref();
+  setInterval(() => retryQueuedSubmissions(), every).unref();
 }
 
 /**

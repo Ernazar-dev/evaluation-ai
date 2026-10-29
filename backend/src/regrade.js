@@ -11,6 +11,7 @@
 //
 // Parametrlar:
 //   --since=2026-10-09T20:00:00+05:00         shu vaqtdan keyingi topshirishlar (standart)
+//   --since=all                               butun davr uchun
 //   --engine=legacy                           gradedBy qiymati (vergul bilan bir nechta: legacy,error)
 //   --ids=12,15                               faqat shu submission id lar
 //
@@ -31,7 +32,7 @@ const args = Object.fromEntries(
   })
 );
 
-const since = new Date(args.since || '2026-10-09T20:00:00+05:00');
+const since = args.since === 'all' ? new Date(0) : new Date(args.since || '2026-10-09T20:00:00+05:00');
 const engines = String(args.engine || 'legacy').split(',').map((s) => s.trim());
 const ids = args.ids ? String(args.ids).split(',').map(Number) : null;
 const mode = args.delete ? 'delete' : args.apply ? 'regrade' : 'list';

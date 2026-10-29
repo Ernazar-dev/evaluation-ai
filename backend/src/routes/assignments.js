@@ -788,7 +788,7 @@ router.get('/:id(\\d+)/submissions', async (req, res) => {
       assignment_title: s.assignment ? s.assignment.title : 'Unknown',
       submitted_at: s.submittedAt ? s.submittedAt.toISOString() : null,
       overall_score: s.overallScore,
-      ai_feedback_summary: s.aiFeedbackSummary,
+      ai_feedback_summary: s.gradedBy === 'queued' ? null : s.aiFeedbackSummary,
       plagiarism_score: s.plagiarismScore,
       plagiarism_status: s.plagiarismStatus,
     }))
@@ -1099,7 +1099,7 @@ router.get('/submissions/:id(\\d+)', async (req, res) => {
     final_score: submission.teacherScore ?? submission.overallScore,
     reviewed_at: submission.reviewedAt ? submission.reviewedAt.toISOString() : null,
     graded_by: submission.gradedBy,
-    ai_feedback_summary: submission.aiFeedbackSummary,
+    ai_feedback_summary: submission.gradedBy === 'queued' ? null : submission.aiFeedbackSummary,
     presentation_path: !!submission.presentationPath,
     plagiarism: await plagiarismPayload(submission, req.user.role !== 'student'),
     sections,
@@ -1219,7 +1219,7 @@ router.get('/export/:submission_id(\\d+)', async (req, res) => {
     // `null` is pending; 0 is a grade, and reporting it as pending would tell a
     // student their rejected work was never marked.
     status: submission.overallScore === null ? 'Pending' : 'Graded',
-    ai_comment: submission.aiFeedbackSummary || 'No summary available.',
+    ai_comment: (submission.gradedBy !== 'queued' && submission.aiFeedbackSummary) || 'No summary available.',
     plagiarism: {
       score: submission.plagiarismScore,
       status: submission.plagiarismStatus,

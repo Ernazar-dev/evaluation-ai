@@ -37,6 +37,11 @@ const MAX_INLINE_BYTES = 15 * 1024 * 1024;
 
 export const isConfigured = () => !!config.geminiApiKey;
 
+// Set when every model in the chain came back 429. Until then `generate` fails
+// fast instead of walking a chain that is known to be out of quota.
+let cooldownUntil = 0;
+export const coolingDown = () => Date.now() < cooldownUntil;
+
 /** Reads a file into the `input` part the grader passes around, or null. */
 export async function filePart(filePath) {
   if (!filePath) return null;
@@ -179,6 +184,20 @@ async function callOnce(model, { system, input, schema, temperature, signal }) {
  */
 export async function generate({ system, input, schema, temperature = 0 }) {
   if (!isConfigured()) throw new GeminiError('GEMINI_API_KEY is not set');
+  if (coolingDown()) {
+    const mins = Math.ceil((cooldownUntil - Date.now()) / 60000);
+    throw new GeminiError(`Gemini quota exhausted, paused for ${mins} more min`, {
+      status: 429,
+      retryable: true,
+    });
+  }
+  if (coolingDown()) {
+    const mins = Math.ceil((cooldownUntil - Date.now()) / 60000);
+    throw new GeminiError(`Gemini quota exhausted, paused for ${mins} more min`, {
+      status: 429,
+      retryable: true,
+    });
+  }
 
   // De-duplicated: naming the primary model in GEMINI_FALLBACK_MODELS too (easy
   // to do, and the shipped defaults used to) meant burning a second attempt on
@@ -187,6 +206,7 @@ export async function generate({ system, input, schema, temperature = 0 }) {
   const models = [...new Set([config.geminiModel, ...config.geminiFallbackModels])];
   let lastError;
   const failures = [];
+  let allQuota = true;
 
   for (const model of models) {
     const controller = new AbortController();
@@ -197,6 +217,7 @@ export async function generate({ system, input, schema, temperature = 0 }) {
     } catch (e) {
       lastError = e;
       failures.push(`${model}: ${String(e.message).slice(0, 120)}`);
+      if (e?.status !== 429) allQuota = false;
       // A non-retryable API error means the request itself is wrong — stop.
       if (e instanceof GeminiError && e.status && !e.retryable) break;
     } finally {
@@ -206,6 +227,13 @@ export async function generate({ system, input, schema, temperature = 0 }) {
   // The thrown error is the last model's alone, which hides why the earlier
   // ones were skipped — log the whole chain so the first failure is visible.
   if (failures.length > 1) console.error(`Gemini chain failed -> ${failures.join(' | ')}`);
+  if (allQuota && failures.length === models.length && config.geminiCooldownMs > 0) {
+    cooldownUntil = Date.now() + config.geminiCooldownMs;
+    console.error(
+      `Gemini: every model is out of quota — pausing calls for ${Math.round(config.geminiCooldownMs / 60000)} min; ` +
+        'submissions wait in the grading queue meanwhile.'
+    );
+  }
   throw lastError || new GeminiError('All Gemini models failed');
 }
 

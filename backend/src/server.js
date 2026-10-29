@@ -1,7 +1,7 @@
 import { createApp } from './app.js';
 import config from './config.js';
 import prisma from './lib/prisma.js';
-import { failStalledSubmissions } from './services/gradingService.js';
+import { failStalledSubmissions, startGradingQueue } from './services/gradingService.js';
 
 const app = createApp();
 
@@ -69,6 +69,9 @@ const server = app.listen(config.port, '0.0.0.0', () => {
   // from the listen callback: a slow or still-waking database must delay the
   // sweep, never the server accepting traffic.
   failStalledSubmissions().catch((e) => console.error('stalled sweep failed', e));
+  // Work Gemini could not grade yet (quota, overload) waits in a queue and is
+  // retried in the background instead of receiving a made-up fallback score.
+  startGradingQueue();
 });
 
 // The ERR_CONNECTION_CLOSED fix.

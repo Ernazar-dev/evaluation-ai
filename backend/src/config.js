@@ -47,6 +47,19 @@ const config = {
   // A second "auditor" pass that re-checks every proposed score against the
   // cited evidence and corrects unsupported ones. Higher accuracy, one extra call.
   geminiVerify: (process.env.GEMINI_VERIFY || 'false').toLowerCase() === 'true',
+  // Once every model in the chain has answered 429 (quota exhausted), further
+  // calls are pointless for a while and each one still costs seconds — or, on a
+  // busy model, the full timeout. For this long Gemini is not called at all, so
+  // new submissions are queued instantly instead of hanging the server.
+  geminiCooldownMs: parseInt(process.env.GEMINI_COOLDOWN_MINUTES || '15', 10) * 60 * 1000,
+
+  // Grading queue. When Gemini is unavailable a submission is NOT graded by the
+  // length-based fallback any more (it handed out passing marks to weak work);
+  // it waits as "processing" and is retried on this interval until Gemini
+  // answers. After `gradeQueueMaxHours` it is closed out as a technical error.
+  gradeRetryMinutes: Math.max(1, parseInt(process.env.GRADE_RETRY_MINUTES || '10', 10) || 10),
+  gradeRetryBatch: Math.max(1, parseInt(process.env.GRADE_RETRY_BATCH || '5', 10) || 5),
+  gradeQueueMaxHours: Math.max(1, parseInt(process.env.GRADE_QUEUE_MAX_HOURS || '72', 10) || 72),
 
   // How many times a student may hand in the same assignment. Only their best
   // attempt counts towards the grade, so extra attempts can raise a mark but
